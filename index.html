@@ -293,7 +293,7 @@
     <header class="sc-head">
       <p class="sc-eyebrow">Controls</p>
       <h2 id="controls-title">Touch it and it lifts.</h2>
-      <p class="sc-lead">Press a thumb and it becomes a lens that magnifies what it covers, stretches with your speed and settles on a spring. Underneath, every control is a native input, so keyboards and screen readers just work.</p>
+      <p class="sc-lead">Press a thumb and it becomes a lens that magnifies what it covers, stretches with your speed, takes the width of the option under it and settles on a spring. Underneath, every control is a native input, so keyboards and screen readers just work.</p>
     </header>
     <div class="sc-stage sc-stage-controls" data-scheme="dark">
       <canvas class="sc-art" data-art="mosaic" data-seed="21" data-theme="dark" aria-hidden="true"></canvas>
@@ -310,6 +310,11 @@
             <label><input type="radio" name="ctlRange" value="w" checked><span>Week</span></label>
             <label><input type="radio" name="ctlRange" value="m"><span>Month</span></label>
             <label><input type="radio" name="ctlRange" value="y"><span>Year</span></label>
+          </div>
+          <div class="glass glass-segmented" role="radiogroup" aria-label="Shelf" data-glass-segments="content" data-glass-priority="3">
+            <label><input type="radio" name="ctlShelf" value="all" checked><span>All</span></label>
+            <label><input type="radio" name="ctlShelf" value="fav"><span>Favorites</span></label>
+            <label><input type="radio" name="ctlShelf" value="new"><span>Recently Added</span></label>
           </div>
           <div class="sc-slider-row">
             <svg class="i" aria-hidden="true"><use href="#i-speaker"/></svg>

@@ -1,4 +1,4 @@
-/*! Liquid Glass for the Web v1.0.0 | MIT License | An independent, Apple-inspired implementation. Not affiliated with Apple. */
+/*! Liquid Glass for the Web v1.1.0 | MIT License | An independent, Apple-inspired implementation. Not affiliated with Apple. */
 
 /* ── 00-properties.css */
 /* Registered custom properties (§3.10). Registration makes them animatable (tone crossfade)
@@ -814,7 +814,10 @@
 /* Segmented control (§4.7.5): a 32 px capsule of equal-width segments (no dividers). Each radio
    is stretched transparent over its label, so hit-testing, focus rings, arrow keys and forms stay
    native. The white resting pill sits under the labels and the latent lens above them
-   (comp-pill.js). Behaviour: comp-segmented.js. */
+   (comp-pill.js). Behaviour: comp-segmented.js.
+   data-glass-segments="content" sizes each segment by its label instead: the label's own width
+   plus an equal share of the room that is left. The pill, and the lens while it scrubs, then take
+   the width of the segment they are on. */
 @layer liquid-glass {
   :where(.glass-segmented) {
     position: relative;
@@ -875,6 +878,7 @@
     text-overflow: ellipsis;
     pointer-events: none;
   }
+  :where(.glass-segmented[data-glass-segments="content"] > label) { flex: 1 1 auto; }
   :where(.glass-segmented > label:has(> input:checked), .glass-segmented-clip > * > :has(> input:checked)) { font-weight: 600; }
   :where(.glass-segmented > label:has(> input:disabled)) { cursor: default; opacity: .4; }
   :where(.glass-segmented > label:has(> input:not(:checked):active) > :not(input)) { opacity: .6; }

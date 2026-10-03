@@ -1,10 +1,10 @@
-/*! Liquid Glass for the Web v1.0.0 | MIT License | An independent, Apple-inspired implementation. Not affiliated with Apple. */
+/*! Liquid Glass for the Web v1.1.0 | MIT License | An independent, Apple-inspired implementation. Not affiliated with Apple. */
 (function (addons) {
 'use strict';
 // Already loaded (e.g. classic script + ES module, or the core and then the all-in-one): only
 // the groups the first copy lacks are added.
 if (globalThis.LiquidGlass?.version) { for (const [name, fn] of addons) globalThis.LiquidGlass.extend?.(name, fn); return; }
-const VERSION = '1.0.0';
+const VERSION = '1.1.0';
 // ── core-00-base.js ─────────────────────────────────────────────────────────
 // Namespaces. `I` is the internal API shared with component partials (see INTERNAL-API.md);
 // `LG` becomes globalThis.LiquidGlass. Nothing in the core touches the DOM at load time, so the
@@ -7580,6 +7580,14 @@ try { (function () {
 // follows the pointer on the lift spring. Tier A magnifies the items through the lens filter.
 // Tier B has no live refraction, so the lens magnifies the host's own items by cloning them into
 // itself (clone-magnify, §4.7.2). Exposed as I.Pill for the component partials.
+//
+// Fit (option `fit`, on in the tab bar and the segmented control): while it scrubs, the lifted
+// lens takes the width of the slot under it, so over items of different widths it always covers
+// exactly the item a release would pick. Its box changes at once, because a lens map is built for
+// one size (a box animated through sizes with no map of their own pinches what is under it); the
+// width it SHOWS eases there on the snappy spring, drawn as an x scale that carries the map along
+// with the glass. The maps for every slot width are built ahead, when idle. With slots of one
+// width (the default layout of both components) none of this runs.
 
 const { clamp, fmt } = I;
 
@@ -7603,16 +7611,20 @@ class Pill {
    * lift        I.lift options for the lens.
    * preview     class for the item under the lifted lens (optional).
    * selectable  (i) → whether a scrub may end on slot i.
+   * fit         the lifted lens takes the width of the slot under it (see the note above).
    * signal      aborts the host listeners the pill installs.
    * The lens takes the host's tone (data-lg-tone) and follows it.
    */
-  constructor(host, { name, items, lift, preview = null, selectable = () => true, signal }) {
+  constructor(host, { name, items, lift, preview = null, selectable = () => true, fit = false, signal }) {
     this.host = host;
     this.name = name;
     this.items = items;
     this.liftOpts = lift;
     this.previewClass = preview;
     this.selectable = selectable;
+    this.fit = fit;
+    this.refitQueued = false;
+    this.warmQueued = false;
     this.slots = [];        // { el, x, y, w, h } in host padding-box px, untransformed
     this.scale = 1;         // host's on-screen scale (press, materialize)
     this.origin = [0, 0];   // client position of the host's padding box
@@ -7639,6 +7651,8 @@ class Pill {
     const paint = () => this.schedulePaint();
     this.x = new I.Spring({ preset: 'snappy', onUpdate: (x, v) => this.moved(x, v), onRest: () => this.rested() });
     this.w = new I.Spring({ preset: 'snappy', onUpdate: paint });
+    // Fit: the width the lens still has to give back after it took a new slot's box (px, → 0).
+    this.ease = new I.Spring({ preset: 'snappy', onUpdate: paint });
     this.squash = new I.Spring({ preset: 'unlift', onUpdate: paint });
     this.stretch = new I.Stretch({ axis: 'x', onUpdate: (m) => { this.m = m; paint(); } });
 
@@ -7667,6 +7681,7 @@ class Pill {
       const b = el.getBoundingClientRect();
       return { el, x: (b.left - ox) / k, y: (b.top - oy) / k, w: b.width / k, h: b.height / k };
     });
+    if (this.fit) this.warmSoon();
   }
 
   /** Client x → host px. */
@@ -7838,6 +7853,89 @@ class Pill {
       this.clone?.items.forEach((c, j) => c.classList.toggle(cls, j === i));
     }
     this.preview = i;
+    // Fit: the slot under the lens changed. Refit after the spring step that reported it (this
+    // runs inside the x spring's update, which must not have its value moved under it).
+    if (this.fit && this.lifted && i >= 0 && !this.refitQueued) {
+      this.refitQueued = true;
+      queueMicrotask(() => { this.refitQueued = false; this.refit(); });
+    }
+  }
+
+  // ── Fit: the lifted lens takes the width of the slot under it ────────────
+  /**
+   * Gives the parts the box of the slot under the lens, about their centre. The box changes at
+   * once and the lens glass re-reads it and swaps in the map for that size (built ahead by
+   * warm()), so no frame refracts through a map of another size. What is SHOWN does not jump:
+   * the difference goes into `ease`, which springs to 0 (widthScale). Reduced motion (§5.11)
+   * keeps the plain change.
+   */
+  refit() {
+    const s = this.slots[this.preview], w = this.w.value;
+    if (!s || !this.lifted || this.dead || Math.abs(s.w - w) < 1) return;
+    this.w.jump(s.w);
+    // Shift the moving spring by half the change (value and target); its velocity is kept.
+    this.x.value += (w - s.w) / 2;
+    this.x.target += (w - s.w) / 2;
+    if (I.reducedMotion()) this.ease.jump(0);
+    else {
+      this.ease.value += w - s.w; // a refit during an earlier ease carries on from where it was
+      this.ease.to(0, { preset: 'snappy' });
+    }
+    this.paint();
+    if (!this.lens.lifted) return; // Tier C, reduced motion: the flat pill scrubs alone
+    this.lens.refresh();
+    // Growth in px (the tab bar's) makes the lift scale depend on the size: lift again (it is
+    // lifted, so this only re-derives the growth) and write the channel now. The lift spring
+    // would write it on its next step, and until then the old factor would sit on the new box.
+    if (this.liftOpts?.grow?.px != null) {
+      I.lift(this.lens, this.liftOpts);
+      const g = this.lens.liftGrow, p = this.lens.anim?.lift;
+      if (g && p != null) I.setChannel(this.lens, 'lift', { sx: 1 + (g[0] - 1) * p, sy: 1 + (g[1] - 1) * p });
+    }
+  }
+
+  /**
+   * The x scale that shows the eased width on parts whose box is already the new slot's (1 once
+   * the ease has settled). The lift grows the lens too: by a factor, where the two scales simply
+   * multiply, or by px per side, where it is the grown widths that have to match.
+   */
+  widthScale() {
+    const e = this.ease.value, w = this.w.value;
+    if ((e === 0 && !this.ease.active) || !(w > 0)) return 1;
+    const px = this.liftOpts?.grow?.px, extra = px != null ? 2 * px * (this.lens.anim?.lift ?? 0) : 0;
+    return (Math.max(1, w + e) + extra) / (w + extra);
+  }
+
+  /** Builds the lens maps ahead, when the browser is idle (once per batch of measures). */
+  warmSoon() {
+    if (this.warmQueued || this.dead) return;
+    this.warmQueued = true;
+    const run = () => { this.warmQueued = false; this.warm(); };
+    // The browser's idle callback, not I.whenIdle: warm() starts map builds, which queue idle
+    // jobs of their own on the library's queue.
+    if (typeof requestIdleCallback === 'function') requestIdleCallback(run, { timeout: 1500 });
+    else setTimeout(run, 200);
+  }
+
+  /**
+   * Fit: gives the latent lens each slot width in turn, so the core builds (and caches) the lens
+   * map for every size a refit can ask for. Only the lens's own box is touched, and it is put
+   * back in the same task, so nothing paints in between. Skipped while the pill is lifted or
+   * settling, and when every slot has one width.
+   */
+  warm() {
+    if (this.dead || this.lifted || this.lens.lifted || this.box.h == null) return;
+    const widths = [...new Set(this.slots.map((s) => Math.round(s.w)))].filter((w) => w > 0);
+    if (widths.length < 2) return;
+    const style = this.lensEl.style, keep = style.width;
+    for (const w of widths) {
+      style.width = `${w}px`;
+      this.lens.refresh();
+      I.prepareLift(this.lens, this.liftOpts);
+    }
+    style.width = keep;
+    this.lens.refresh();
+    I.prepareLift(this.lens, this.liftOpts);
   }
 
   setTone(tone) {
@@ -7909,7 +8007,8 @@ class Pill {
   paint() {
     const x = this.x.value, w = this.w.value, q = this.squash.value;
     // Velocity stretch elongates along x; the arrival squash compresses along x and bulges in y.
-    const sx = this.m.sx / (1 + q), sy = this.m.sy * (1 + q);
+    // A fitted lens also shows its eased width as an x scale (widthScale, 1 at rest).
+    const sx = (this.m.sx / (1 + q)) * this.widthScale(), sy = this.m.sy * (1 + q);
     const lift = clamp(parseFloat(this.lensEl.style.getPropertyValue('--_lg-lift')) || 0, 0, 1);
     const f = this.fill.style, opacity = this.fade * (1 - lift);
     f.translate = `${fmt(x, 2)}px 0`;
@@ -7929,7 +8028,7 @@ class Pill {
     this.offFrame?.();
     this.offFrame = null;
     this.setPreview(-1);
-    for (const s of [this.x, this.w, this.squash]) s.stop();
+    for (const s of [this.x, this.w, this.ease, this.squash]) s.stop();
     this.stretch.stop();
     this.fadeTween?.stop();
     this.ghost?.stop();
@@ -7991,7 +8090,7 @@ class TabBar {
 
     this.collect();
     this.pill = new I.Pill(bar, {
-      name: 'tab', items: () => this.items, preview: PREVIEW, signal,
+      name: 'tab', items: () => this.items, preview: PREVIEW, fit: true, signal,
       // Clearer than the core's lens (σ .6), so 11 px labels stay crisp under magnification.
       lift: { zoom: 1.18, dispersion: 0.8, grow: { px: 8 }, blur: 0.4 },
       selectable: (i) => !isDisabled(this.items[i]),
@@ -8334,6 +8433,10 @@ try { (function () {
 // zoom 1.1, dispersion .5); dragging scrubs across the segments and the choice commits on
 // release through the radio's own click, so `input` and `change` fire natively. Arrow keys,
 // forms and assistive technology keep the radios' native behaviour.
+//
+// data-glass-segments="content" sizes the segments by their labels (21-segmented.css). The pill
+// then has a different width on each segment, and the lifted lens takes the width of the segment
+// under it as it scrubs (the pill's `fit`).
 
 const RADIO = ':scope > input[type="radio"]';
 
@@ -8350,6 +8453,8 @@ class Segmented {
     this.watched = new Map(); // input → its own `checked` descriptor before ours (or undefined)
     this.gesture = null;   // { id, grab, ctl }
     this.resetTimer = 0;
+    this.unobserveSegments = []; // content-sized segments: their own resize watchers
+    this.relayoutQueued = false;
     checkedProperty ??= Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'checked');
 
     if (!el.matches('fieldset') && !el.hasAttribute('role')) {
@@ -8358,7 +8463,7 @@ class Segmented {
     }
     this.collect();
     this.pill = new I.Pill(el, {
-      name: 'segmented', items: () => this.segments, signal,
+      name: 'segmented', items: () => this.segments, fit: true, signal,
       lift: { zoom: 1.1, dispersion: 0.5, grow: 1.1, blur: 0.4 }, // clear enough for crisp labels
       selectable: (i) => !this.inputs[i].matches(':disabled'),
     });
@@ -8387,6 +8492,11 @@ class Segmented {
     this.unwatch();
     this.segments = [...this.el.querySelectorAll(':scope > label')].filter((l) => l.querySelector(RADIO));
     this.inputs = this.segments.map((l) => l.querySelector(RADIO));
+    // Sized by content, a segment's box follows its label (new text, a late font) without the
+    // track changing size: watch the segments too.
+    for (const off of this.unobserveSegments) off();
+    this.unobserveSegments = this.el.getAttribute('data-glass-segments') === 'content'
+      ? this.segments.map((l) => I.observeResize(l, () => this.segmentResized())) : [];
     if (!this.segments.length) I.debugWarn(this.el, 'segmented-items', 'a .glass-segmented needs <label> children that each hold an <input type="radio">; this one has none.');
     // Radios only form a group (native arrow keys, one checked) when they share a name.
     const name = this.inputs.find((i) => i.name)?.name || I.uniqueId('lg-seg-');
@@ -8420,11 +8530,30 @@ class Segmented {
     this.watched.clear();
   }
 
+  /**
+   * One relayout per batch of segment resizes, and never under a pill that is moving: a change
+   * of choice resizes two segments (the checked label is semibold) while the pill slides to the
+   * new one, and sync() has measured for that already.
+   */
+  segmentResized() {
+    if (this.relayoutQueued) return;
+    this.relayoutQueued = true;
+    queueMicrotask(() => {
+      this.relayoutQueued = false;
+      const p = this.pill;
+      if (!p || p.dead || p.lifted || p.x.active || p.w.active) return;
+      p.relayout();
+    });
+  }
+
   checked() {
     return this.inputs.findIndex((i) => i.checked);
   }
 
   sync() {
+    // Sized by content, the segments move when the choice does (the checked label is semibold):
+    // read their boxes again before placing the pill.
+    if (this.el.getAttribute('data-glass-segments') === 'content') this.pill.measure();
     this.pill.place(this.checked());
   }
 
@@ -8435,7 +8564,9 @@ class Segmented {
     if (i < 0 || i !== this.checked() || this.inputs[i].matches(':disabled')) return; // other segments: a native tap
     this.pill.measure();
     const s = this.pill.slots[i], g = (this.gesture = { id: e.pointerId, ctl: new AbortController() });
-    g.grab = this.pill.local(e.clientX) - (s.x + s.w / 2); // keep the grab point under the pointer
+    // Keep the grab point under the pointer: as a share of the pill's half width, so a pill that
+    // narrows over a short segment still sits under the pointer (equal segments: a fixed offset).
+    g.grab = (this.pill.local(e.clientX) - (s.x + s.w / 2)) / (s.w / 2 || 1);
     try { this.el.setPointerCapture(e.pointerId); } catch { /* the pointer is already gone */ }
     const opts = { capture: true, signal: g.ctl.signal };
     addEventListener('pointermove', (ev) => this.move(ev), opts);
@@ -8446,7 +8577,7 @@ class Segmented {
 
   move(e) {
     const g = this.gesture;
-    if (g && e.pointerId === g.id) this.pill.scrub(this.pill.local(e.clientX) - g.grab);
+    if (g && e.pointerId === g.id) this.pill.scrub(this.pill.local(e.clientX) - g.grab * (this.pill.w.value / 2));
   }
 
   up(e, commit) {
@@ -8470,11 +8601,17 @@ class Segmented {
     this.pill.relayout();
   }
 
+  /** data-glass-segments changed: the segments have new boxes. */
+  attributeChanged() {
+    this.refresh();
+  }
+
   destroy() {
     this.gesture?.ctl.abort();
     clearTimeout(this.resetTimer);
     this.mo.disconnect();
     this.unobserve();
+    for (const off of this.unobserveSegments) off();
     this.unwatch();
     for (const input of this.named) input.removeAttribute('name');
     if (this.addedRole) this.el.removeAttribute('role');
@@ -8485,6 +8622,7 @@ class Segmented {
 
 I.defineComponent('segmented', {
   selector: '.glass-segmented',
+  attributes: ['data-glass-segments'],
   setup: (el, { handle, signal }) => new Segmented(el, handle, signal),
 });
 })(); } catch (e) { console.error('[liquid-glass] comp-segmented.js failed', e); }
