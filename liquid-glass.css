@@ -1,0 +1,1984 @@
+/*! Liquid Glass for the Web v1.0.0 | MIT License | An independent, Apple-inspired implementation. Not affiliated with Apple. */
+
+/* ── 00-properties.css */
+/* Registered custom properties (§3.10). Registration makes them animatable (tone crossfade)
+   and gives the glass layers sane values before any JS runs. */
+@layer liquid-glass {
+  @property --_lg-mat   { syntax: '<number>'; inherits: true;  initial-value: 1; }   /* materialize 0 → 1 */
+  @property --_lg-lift  { syntax: '<number>'; inherits: true;  initial-value: 0; }   /* lifted lens 0 → 1 */
+  @property --_lg-glow  { syntax: '<number>'; inherits: true;  initial-value: 0; }   /* touch glow 0 → 1 */
+  @property --_lg-gr    { syntax: '<length>'; inherits: true;  initial-value: 0px; } /* touch glow radius */
+  @property --_lg-fill  { syntax: '<color>';  inherits: true;  initial-value: transparent; }
+  @property --_lg-label { syntax: '<color>';  inherits: true;  initial-value: black; }
+  /* Label on a custom tint: contrast-color(tint) where supported; white while no tint is set. */
+  @property --_lg-tint-label { syntax: '<color>'; inherits: false; initial-value: #fff; }
+  /* Per-element fill opacity that does not leak into nested glass (unset = the inherited
+     --glass-opacity tokens apply). The `opacity` option writes these. */
+  @property --glass-fill-opacity      { syntax: '*'; inherits: false; }
+  @property --glass-fill-opacity-dark { syntax: '*'; inherits: false; }
+}
+
+/* ── 01-tokens.css */
+/* Public tokens (§4.3), presets (§4.4) and spring easings (§5.1).
+   Only tokens CSS itself uses are defined here. The optics tokens (--glass-blur, --glass-refraction,
+   --glass-bezel, --glass-dispersion, --glass-highlight, --glass-light-angle, --glass-edge-dark,
+   --glass-saturation, --glass-brightness, --glass-press-scale) are read by the JS when set; left
+   unset, the active preset (LiquidGlass.defaults) applies. */
+@layer liquid-glass {
+  :root {
+    --glass-accent: #0a84ff;
+    /* Increase Contrast accents (Apple's high-contrast systemBlue): on light and dark glass. */
+    --glass-accent-contrast: #0040dd;
+    --glass-accent-contrast-dark: #409cff;
+    --glass-opacity: .14;
+    --glass-opacity-dark: .30;
+    --glass-opacity-clear: .02;
+    /* Fill floor for text-bearing glass that does not adapt (cards, panels; §6.1.5). */
+    --glass-opacity-text: .55;
+    --glass-opacity-text-dark: .62;
+    --glass-dim: rgb(0 0 0 / .35);
+    --glass-shadow-strength: 1;
+
+    /* CSS easing equivalents of the springs, sampled at 25 points. */
+    --glass-ease-lift: linear(0, 0.075, 0.245, 0.447, 0.637, 0.801, 0.925, 1.008, 1.056, 1.077, 1.079, 1.069, 1.055, 1.038, 1.024, 1.012, 1.003, 0.998, 0.995, 0.994, 0.994, 0.995, 0.996, 0.997, 1);
+    --glass-ease-unlift: linear(0, 0.06, 0.199, 0.368, 0.537, 0.687, 0.81, 0.903, 0.968, 1.01, 1.034, 1.044, 1.045, 1.041, 1.034, 1.026, 1.019, 1.012, 1.007, 1.003, 1.001, 0.999, 0.998, 0.998, 1);
+    --glass-ease-snappy: linear(0, 0.049, 0.157, 0.293, 0.427, 0.554, 0.662, 0.753, 0.824, 0.879, 0.921, 0.952, 0.972, 0.987, 0.996, 1.001, 1.004, 1.006, 1.006, 1.005, 1.005, 1.004, 1.003, 1.003, 1);
+    --glass-ease-smooth: linear(0, 0.052, 0.161, 0.291, 0.419, 0.532, 0.631, 0.712, 0.777, 0.83, 0.871, 0.902, 0.926, 0.945, 0.959, 0.969, 0.977, 0.983, 0.988, 0.991, 0.993, 0.995, 0.996, 0.997, 1);
+    --glass-duration-lift: 430ms;
+    --glass-duration-unlift: 720ms;
+    --glass-duration-snappy: 450ms;
+    --glass-duration-smooth: 680ms;
+  }
+
+  /* iOS 27: more diffusion, a darkened outer edge, brighter highlights (the last two are JS). */
+  :root[data-glass-preset="ios27"] {
+    --glass-opacity: .24;
+    --glass-opacity-dark: .38;
+  }
+}
+
+/* ── 02-base.css */
+/* Base glass (§2.1, §3.10). The host paints nothing itself: ::before is the backdrop layer
+   (frost, refraction, fill) and ::after the surface overlay (highlights, edge, touch glow).
+   Rules R1/R5: never give .glass a background, opacity, filter, mask or clip-path.
+   Everything is :where() so any author rule wins; later rules here win over earlier ones. */
+@layer liquid-glass {
+  :where(.glass) {
+    /* Per-element state the JS writes inline must not leak into nested glass (CORE-3). */
+    --_lg-bf: initial; --_lg-o: initial; --_lg-ol: initial; --_lg-or: initial; --_lg-r: initial; --_lg-clip: initial; --_lg-mask: initial; --_lg-bw: initial;
+    --_lg-overlay: initial; --_lg-ov-slice: initial; --_lg-ov-width: initial; --_lg-gx: initial; --_lg-gy: initial; --_lg-sy: initial; --_lg-sb: initial; --_lg-so: initial;
+    --_lg-concentric: initial; --_lg-dbg-map: initial; --_lg-dbg-mm: initial; --_lg-dbg-bezel: initial;
+    --_lg-glow: 0; --_lg-gr: 0px; --_lg-lift: 0;
+    --_lg-a: var(--glass-fill-opacity, var(--glass-opacity, .14));
+    --_lg-ad: var(--glass-fill-opacity-dark, var(--glass-opacity-dark, .30));
+    /* Fill α with the "Clear ↔ Tinted" preference: α·(1 + t⁻) + (.85 − α)·t⁺ (§4.4). At t = −1
+       (pure clear) every fill, the text floor and the clear variant's dim reach α 0; tinted
+       glass keeps its tint. */
+    --_lg-fill: rgb(255 255 255 / calc(var(--_lg-a) * (1 + var(--_lg-tn, 0)) + (.85 - var(--_lg-a)) * var(--_lg-tp, 0)));
+    --_lg-label: rgb(0 0 0 / .86);
+    --_lg-glow-peak: .30;
+    --_lg-halo: rgb(255 255 255 / .9);
+    --_lg-vis: var(--_lg-mat);
+    /* Depth (V5): --_lg-depth is drawn by the overlay layer in Tiers A/B (whose opacity already
+       carries --_lg-vis), --_lg-shadow by the host everywhere else. */
+    --_lg-depth:
+      0 var(--_lg-sy, 8px) var(--_lg-sb, 28px) rgb(0 0 0 / calc((var(--_lg-so, .14) + .08 * var(--_lg-lift)) * var(--glass-shadow-strength, 1))),
+      0 1px 3px rgb(0 0 0 / calc(.08 * var(--glass-shadow-strength, 1)));
+    --_lg-shadow:
+      0 var(--_lg-sy, 8px) var(--_lg-sb, 28px) rgb(0 0 0 / calc((var(--_lg-so, .14) + .08 * var(--_lg-lift)) * var(--glass-shadow-strength, 1) * var(--_lg-vis))),
+      0 1px 3px rgb(0 0 0 / calc(.08 * var(--glass-shadow-strength, 1) * var(--_lg-vis)));
+    position: relative;
+    isolation: isolate;
+    border-radius: var(--glass-radius, 9999px);
+    color: var(--_lg-label);
+    box-shadow: var(--_lg-shadow);
+    /* Draws the shape only in forced colours; a border would move the layers' containing block. */
+    outline: 1px solid transparent;
+    outline-offset: -1px;
+    -webkit-tap-highlight-color: transparent;
+    /* Legibility halo for text on transparent glass (§6.1.5). The "Clear" preference takes the
+       fill away (--_lg-tn → −1), so the halo tightens and strengthens as it does: at pure clear it
+       alone keeps labels, menus and sheets legible over busy content. Nothing changes at t ≥ 0. */
+    text-shadow: 0 0 1px rgb(255 255 255 / calc(.5 - .45 * var(--_lg-tn, 0))), 0 0 3px rgb(255 255 255 / calc(-.7 * var(--_lg-tn, 0))),
+      0 1px 12px rgb(255 255 255 / calc(.35 - .25 * var(--_lg-tn, 0)));
+    transition: --_lg-fill .25s, --_lg-label .25s;
+  }
+  /* The first tone of glass coming into view applies at once, not as a crossfade. */
+  :where(.glass[data-lg-instant]) { transition: none; }
+
+  :where(.glass)::before {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    pointer-events: none;
+    /* JS overscans this layer by --_lg-o (less at the page's side edges: --_lg-ol, --_lg-or) and
+       clips it back to the shape (clip-path, or a gradient mask under a rounded-clip ancestor), so
+       refraction and blur can sample beyond the edge. */
+    inset: calc(-1 * (var(--_lg-o, 0px) + var(--_lg-bw, 0px))) calc(-1 * (var(--_lg-or, var(--_lg-o, 0px)) + var(--_lg-bw, 0px)))
+      calc(-1 * (var(--_lg-o, 0px) + var(--_lg-bw, 0px))) calc(-1 * (var(--_lg-ol, var(--_lg-o, 0px)) + var(--_lg-bw, 0px)));
+    border-radius: var(--_lg-r, inherit);
+    clip-path: var(--_lg-clip, none);
+    -webkit-mask: var(--_lg-mask, none);
+    mask: var(--_lg-mask, none);
+    background: var(--_lg-fill);
+    opacity: var(--_lg-vis);
+    /* No url() here: Safari and Firefox drop the whole declaration if it contains one. JS injects
+       the Tier A filter (and, in Blink, the frost) through --_lg-bf only after positively
+       detecting Blink. The prefixed declaration comes last and literal: WebKit mishandles var()
+       inside backdrop-filter, so there the JS frost is a literal rule (data-lg-bk). */
+    backdrop-filter: var(--_lg-bf, blur(var(--glass-blur, 12px)) saturate(var(--glass-saturation, 1.6)) brightness(var(--glass-brightness, 1.05)));
+    -webkit-backdrop-filter: blur(12px) saturate(1.6) brightness(1.05);
+  }
+
+  /* Without JS: a gradient specular ring, brightest top-left. */
+  :where(.glass)::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(135deg, rgb(255 255 255 / .75), rgb(255 255 255 / .10) 35%, rgb(255 255 255 / 0) 60%, rgb(255 255 255 / .38)) border-box;
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+    opacity: var(--_lg-vis);
+  }
+
+  /* With JS: the generated overlay (exact shape, asymmetric highlights; a 9-slice image, so
+     only its corners and edges are stored) plus the touch glow. */
+  :where(.glass[data-lg-ready])::after {
+    inset: calc(-1 * var(--_lg-bw, 0px));
+    padding: 0;
+    -webkit-mask: none;
+    mask: none;
+    background: radial-gradient(circle var(--_lg-gr) at var(--_lg-gx, 50%) var(--_lg-gy, 50%), rgb(255 255 255 / calc(var(--_lg-glow) * var(--_lg-glow-peak))), rgb(255 255 255 / 0));
+    border-image: var(--_lg-overlay, none) var(--_lg-ov-slice, 0) fill / var(--_lg-ov-width, 0) / 0 stretch;
+  }
+  /* The backdrop layer samples everything painted before it, including the host's own box-shadow
+     (a second, offset rim). In the layered tiers the overlay, painted after it, draws the depth. */
+  :where(.glass[data-lg-ready]:is([data-lg-tier="a"], [data-lg-tier="b"])) { box-shadow: none; }
+  :where(.glass[data-lg-ready]:is([data-lg-tier="a"], [data-lg-tier="b"]))::after { box-shadow: var(--_lg-depth); }
+
+  /* ── Tone ─────────────────────────────────────────────────────────────── */
+  /* Before JS (or without it), follow the element's color-scheme, as the JS does for large glass. */
+  @supports (color: light-dark(#000, #fff)) {
+    :where(.glass:not([data-lg-tone], [data-glass-tone])) {
+      --_lg-fill: light-dark(
+        rgb(255 255 255 / calc(var(--_lg-a) * (1 + var(--_lg-tn, 0)) + (.85 - var(--_lg-a)) * var(--_lg-tp, 0))),
+        rgb(28 28 30 / calc(var(--_lg-ad) * (1 + var(--_lg-tn, 0)) + (.85 - var(--_lg-ad)) * var(--_lg-tp, 0))));
+      --_lg-label: light-dark(rgb(0 0 0 / .86), rgb(255 255 255 / .94));
+      --_lg-halo: light-dark(rgb(255 255 255 / .9), rgb(0 0 0 / .8));
+      text-shadow: 0 0 1px light-dark(rgb(255 255 255 / .5), transparent), 0 1px 12px light-dark(rgb(255 255 255 / .35), rgb(0 0 0 / .35));
+    }
+  }
+  :where(.glass[data-lg-tone="dark"], .glass[data-glass-tone="dark"]:not([data-lg-tone])) {
+    --_lg-a: var(--_lg-ad);
+    --_lg-fill: rgb(28 28 30 / calc(var(--_lg-a) * (1 + var(--_lg-tn, 0)) + (.85 - var(--_lg-a)) * var(--_lg-tp, 0)));
+    --_lg-label: rgb(255 255 255 / .94);
+    --_lg-glow-peak: .22;
+    --_lg-halo: rgb(0 0 0 / .8);
+    text-shadow: 0 0 2px rgb(0 0 0 / calc(-.75 * var(--_lg-tn, 0))), 0 0 5px rgb(0 0 0 / calc(-.45 * var(--_lg-tn, 0))),
+      0 1px 10px rgb(0 0 0 / calc(.35 - .2 * var(--_lg-tn, 0)));
+  }
+  /* Text-bearing glass that does not adapt keeps a legible fill (§6.1.5); JS marks it. */
+  :where(.glass[data-lg-text]) {
+    --_lg-a: max(var(--glass-fill-opacity, var(--glass-opacity, .14)), var(--glass-opacity-text, .55));
+  }
+  :where(.glass[data-lg-text][data-lg-tone="dark"]) {
+    --_lg-a: max(var(--_lg-ad), var(--glass-opacity-text-dark, .62));
+  }
+
+  /* ── Tinted: prominent actions and data-glass-tint (V8) ───────────────── */
+  :where(.glass.glass-prominent) {
+    --glass-tint: var(--glass-accent);
+  }
+  /* Without JS, a custom tint comes from the attribute where typed attr() exists; otherwise set
+     style="--glass-tint: …" in markup. */
+  @supports (color: attr(data-x type(<color>), red)) {
+    :where(.glass[data-glass-tint]:not([data-glass-tint="accent"])) {
+      --glass-tint: attr(data-glass-tint type(<color>), var(--glass-accent));
+    }
+  }
+  /* 90 % tint, no brightness lift: the backdrop showing through cannot wash the colour out. */
+  :where(.glass.glass-prominent, .glass[data-glass-tint], .glass[data-lg-tinted]) {
+    --_lg-fill: color-mix(in oklab, var(--glass-tint, var(--glass-accent)) 90%, transparent);
+    --_lg-label: #fff;
+    text-shadow: none;
+  }
+  :where(.glass.glass-prominent, .glass[data-glass-tint], .glass[data-lg-tinted])::before {
+    backdrop-filter: var(--_lg-bf, blur(var(--glass-blur, 12px)) saturate(var(--glass-saturation, 1.8)) brightness(var(--glass-brightness, 1)));
+    -webkit-backdrop-filter: blur(12px) saturate(1.8) brightness(1);
+  }
+  /* Custom tints pick black or white for contrast where supported; the accent keeps white. */
+  @supports (color: contrast-color(red)) {
+    :where(.glass[data-lg-tinted="custom"], .glass[data-glass-tint]:not([data-glass-tint="accent"], [data-lg-tinted])) {
+      --_lg-tint-label: contrast-color(var(--glass-tint));
+      --_lg-label: var(--_lg-tint-label);
+    }
+  }
+
+  /* ── Clear (V9): lensing plus ~1 px of blur, white labels, 35 % dim over bright content ── */
+  :where(.glass[data-glass="clear"]) {
+    --_lg-a: var(--glass-fill-opacity, var(--glass-opacity-clear, .02));
+    --_lg-fill: rgb(255 255 255 / calc(var(--_lg-a) * (1 + var(--_lg-tn, 0))));
+    --_lg-label: rgb(255 255 255 / .96);
+    --_lg-halo: rgb(0 0 0 / .8);
+    text-shadow: 0 0 2px rgb(0 0 0 / calc(-.75 * var(--_lg-tn, 0))), 0 0 5px rgb(0 0 0 / calc(-.45 * var(--_lg-tn, 0))),
+      0 1px 8px rgb(0 0 0 / calc(.3 - .2 * var(--_lg-tn, 0)));
+  }
+  /* A uniform dim. data-glass-dim="auto" (the default) lets the JS turn it off over dark
+     backdrops (data-lg-dim="off"); without JS it stays on, which keeps white labels legible. */
+  :where(.glass[data-glass="clear"]:not([data-glass-dim="none"], [data-glass-dim="full"], [data-lg-dim="off"]))::before {
+    background: color-mix(in srgb, var(--glass-dim, rgb(0 0 0 / .35)) calc(100% * (1 + var(--_lg-tn, 0))), transparent);
+  }
+  :where(.glass[data-glass="clear"])::before {
+    backdrop-filter: var(--_lg-bf, blur(var(--glass-blur, 3px)) saturate(var(--glass-saturation, 1.2)) brightness(var(--glass-brightness, 1)));
+    -webkit-backdrop-filter: blur(3px) saturate(1.2) brightness(1);
+  }
+
+  /* ── Identity: the effect switched off (for toggling) ─────────────────── */
+  :where(.glass[data-glass="identity"]) {
+    box-shadow: none;
+    text-shadow: none;
+  }
+  :where(.glass[data-glass="identity"])::before,
+  :where(.glass[data-glass="identity"])::after {
+    display: none;
+  }
+
+  /* ── iOS 27 preset: more diffusion (no-JS values; JS writes exact ones) ── */
+  :where(:root[data-glass-preset="ios27"] .glass)::before {
+    backdrop-filter: var(--_lg-bf, blur(var(--glass-blur, 16px)) saturate(var(--glass-saturation, 1.5)) brightness(var(--glass-brightness, 1.04)));
+    -webkit-backdrop-filter: blur(16px) saturate(1.5) brightness(1.04);
+  }
+  :where(:root[data-glass-preset="ios27"] .glass:is(.glass-prominent, [data-glass-tint], [data-lg-tinted]))::before {
+    backdrop-filter: var(--_lg-bf, blur(var(--glass-blur, 16px)) saturate(var(--glass-saturation, 1.8)) brightness(var(--glass-brightness, 1)));
+    -webkit-backdrop-filter: blur(16px) saturate(1.8) brightness(1);
+  }
+  :where(:root[data-glass-preset="ios27"] .glass[data-glass="clear"])::before {
+    backdrop-filter: var(--_lg-bf, blur(var(--glass-blur, 4px)) saturate(var(--glass-saturation, 1.2)) brightness(var(--glass-brightness, 1)));
+    -webkit-backdrop-filter: blur(4px) saturate(1.2) brightness(1);
+  }
+
+  /* ── States written by JS ─────────────────────────────────────────────── */
+  /* Lifted lens: the fill clears as --_lg-lift goes 0 → 1. */
+  :where(.glass[data-lg-lifted])::before {
+    background: color-mix(in srgb, var(--_lg-fill) clamp(0%, 100% - 100% * var(--_lg-lift), 100%), rgb(255 255 255 / calc(.04 * (1 + var(--_lg-tn, 0)))));
+  }
+  /* Tier B has no lens: a lifted part switches to the clear frost, eased. */
+  :where(.glass[data-lg-tier="b"][data-lg-lifted])::before {
+    transition: backdrop-filter .2s, -webkit-backdrop-filter .2s;
+  }
+  /* Latent glass shows no layers at rest; they materialize with the lift. */
+  :where(.glass[data-lg-latent]) {
+    --_lg-vis: calc(var(--_lg-mat) * var(--_lg-lift));
+  }
+  /* Component-drawn Tier A backdrop (customBackdrop): the component's filter replaces frost and fill. */
+  :where(.glass[data-lg-custom][data-lg-tier="a"])::before {
+    background: none;
+  }
+  /* Materializing in Tier A: the filter fork ramps from a pass-through, so the layer stays opaque
+     and only the fill fades (no crossfade with the raw backdrop, V14). */
+  :where(.glass[data-lg-mat="fork"])::before {
+    opacity: 1;
+    background: color-mix(in srgb, var(--_lg-fill) calc(100% * var(--_lg-mat)), transparent);
+  }
+  :where(.glass[data-lg-mat="fork"][data-glass="clear"]:not([data-glass-dim="none"], [data-glass-dim="full"], [data-lg-dim="off"]))::before {
+    background: color-mix(in srgb, var(--glass-dim, rgb(0 0 0 / .35)) calc(100% * var(--_lg-mat) * (1 + var(--_lg-tn, 0))), transparent);
+  }
+  /* Materializing: content fades in after the glass. Only glass-free subtrees fade (an opacity
+     < 1 on a wrapper would blank the glass inside it, R2); nested glass fades through --_lg-mat. */
+  :where(.glass[data-lg-mat]) > :where(:not(.glass):not(:has(.glass))),
+  :where(.glass[data-lg-mat]) :where(:not(.glass):has(.glass)) > :where(:not(.glass):not(:has(.glass))),
+  :where(.glass[data-lg-mat]) :where(.glass) > :where(:not(.glass):not(:has(.glass))) {
+    opacity: var(--_lg-content, 1);
+  }
+}
+
+/* ── 03-controls.css */
+/* Simple controls (§4.2, §4.7.1): buttons, icon buttons, groups, toolbars, bars and helpers.
+   Metrics: button 44 (small 32, large 52), group platter 44 / padding 4 / item 36 (RE), spacing 16. */
+@layer liquid-glass {
+  :where(.glass-button, .glass-item) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    box-sizing: border-box;
+    margin: 0;
+    border: 0;
+    background: none;
+    font: 600 17px/1.2 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    letter-spacing: -0.01em;
+    text-decoration: none;
+    white-space: nowrap;
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: manipulation;
+    vertical-align: middle;
+  }
+
+  :where(.glass-button) {
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0 18px;
+  }
+  :where(.glass-button[data-glass-size="small"]) { min-width: 32px; min-height: 32px; padding: 0 12px; font-size: 15px; }
+  :where(.glass-button[data-glass-size="large"]) { min-width: 52px; min-height: 52px; padding: 0 24px; }
+  :where(.glass-button:disabled, .glass-button[aria-disabled="true"]) {
+    cursor: default;
+    color: color-mix(in srgb, var(--_lg-label) 40%, transparent);
+  }
+
+  :where(.glass-icon) {
+    width: 44px;
+    height: 44px;
+    min-width: 0;
+    min-height: 0;
+    padding: 0;
+    border-radius: 50%;
+    flex: none;
+  }
+  :where(.glass-icon[data-glass-size="small"]) { width: 32px; height: 32px; }
+  :where(.glass-icon[data-glass-size="large"]) { width: 52px; height: 52px; }
+  :where(.glass-button, .glass-icon, .glass-item) > :where(svg) { width: 20px; height: 20px; flex: none; }
+  :where(.glass-icon[data-glass-size="small"]) > :where(svg) { width: 16px; height: 16px; }
+  :where(.glass-icon[data-glass-size="large"]) > :where(svg) { width: 24px; height: 24px; }
+
+  /* One capsule holding several items: glass never sits on glass, items only change fill. */
+  :where(.glass-group) {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    box-sizing: border-box;
+    height: 44px;
+    padding: 4px;
+  }
+  :where(.glass-item) {
+    min-width: 36px;
+    height: 36px;
+    padding: 0 8px;
+    border-radius: 9999px;
+    color: inherit;
+    font-size: 15px;
+    font-weight: 500;
+    transition: background-color .15s;
+  }
+  :where(.glass-item:hover) { background: rgb(0 0 0 / .06); }
+  :where(.glass-item:active) { background: rgb(0 0 0 / .12); }
+  :where(.glass[data-lg-tone="dark"] .glass-item:hover) { background: rgb(255 255 255 / .10); }
+  :where(.glass[data-lg-tone="dark"] .glass-item:active) { background: rgb(255 255 255 / .18); }
+  /* Selected items use the accent pulled toward the label colour, so they stay legible when the
+     glass sits over an accent-coloured backdrop (Increase Contrast swaps in a high-contrast accent). */
+  :where(.glass) { --_lg-ink: color-mix(in oklab, var(--glass-accent) 80%, #000); }
+  :where(.glass[data-lg-tone="dark"], .glass[data-glass-tone="dark"]:not([data-lg-tone])) { --_lg-ink: color-mix(in oklab, var(--glass-accent) 80%, #fff); }
+  :where(.glass-item[aria-pressed="true"], .glass-item[aria-current]:not([aria-current="false"])) { color: var(--_lg-ink, var(--glass-accent)); }
+  :where(.glass-item:disabled, .glass-item[aria-disabled="true"]) { cursor: default; opacity: .4; background: none; }
+
+  /* Layout only: floating groups and buttons along an edge. */
+  :where(.glass-toolbar) {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    box-sizing: border-box;
+    padding: 8px 16px;
+  }
+  :where(.glass-toolbar[data-glass-placement="top"]) { padding-top: max(8px, env(safe-area-inset-top)); }
+  :where(.glass-toolbar[data-glass-placement="bottom"]) { padding-bottom: max(8px, env(safe-area-inset-bottom)); }
+  :where(.glass-title) {
+    flex: 1;
+    margin: 0;
+    font: 600 17px/1.2 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    text-align: center;
+  }
+
+  /* Full-width or floating single-capsule bar (web navigation). */
+  :where(.glass-bar) {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-sizing: border-box;
+    min-height: 52px;
+    padding: 6px 8px;
+  }
+
+  /* 35 % dim for Clear glass over bright media (HIG). */
+  :where(.glass-dim) { background: var(--glass-dim, rgb(0 0 0 / .35)); }
+
+  /* `hidden` must win over the display of the control classes above. */
+  :where(.glass-button[hidden], .glass-item[hidden], .glass-group[hidden], .glass-toolbar[hidden], .glass-bar[hidden], .glass-title[hidden]) { display: none; }
+
+  /* Explicit shapes (data-glass-shape / the `shape` option) win over the control defaults. A circle
+     needs a square box; aspect-ratio gives it one when only one side is set. */
+  :where(.glass[data-glass-shape="capsule"]) { border-radius: 9999px; }
+  :where(.glass[data-glass-shape="circle"]) { border-radius: 50%; aspect-ratio: 1; }
+  :where(.glass[data-glass-shape="rect"]) { border-radius: var(--glass-radius, 0); }
+  :where(.glass[data-glass-shape="concentric"]) { border-radius: var(--_lg-concentric, var(--glass-radius, 9999px)); }
+
+  :where(.glass-sr-only) {
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    padding: 0 !important;
+    margin: -1px !important;
+    overflow: hidden !important;
+    clip-path: inset(50%) !important;
+    white-space: nowrap !important;
+    border: 0 !important;
+  }
+}
+
+/* ── 04-focus.css */
+/* Focus (§6.1.3): a dual-tone ring that keeps 3:1 against any backdrop — an accent outline
+   over a light (or, on dark tone, dark) halo. The Increase Contrast twins live in 05-a11y.css. */
+@layer liquid-glass {
+  :where(.glass:focus-visible) {
+    outline: 2.5px solid var(--glass-focus-ring, var(--glass-accent));
+    outline-offset: 2px;
+    box-shadow: var(--_lg-shadow), 0 0 0 6.5px var(--_lg-halo);
+  }
+  /* Layered tiers draw depth from the overlay (02-base), so the halo goes there too; on the host
+     it would be sampled into the rim of the backdrop layer. */
+  :where(.glass[data-lg-ready]:is([data-lg-tier="a"], [data-lg-tier="b"]):focus-visible) { box-shadow: none; }
+  :where(.glass[data-lg-ready]:is([data-lg-tier="a"], [data-lg-tier="b"]):focus-visible)::after {
+    box-shadow: var(--_lg-depth), 0 0 0 6.5px var(--_lg-halo);
+  }
+  /* Latent glass at rest shows no layers (a union member, a lens part): the host draws the halo,
+     where there is no visible backdrop layer to sample it. */
+  :where(.glass[data-lg-latent]:not([data-lg-lifted]):is(:focus-visible, :has(> :is(input, textarea, select):focus-visible))) {
+    box-shadow: 0 0 0 6.5px var(--_lg-halo);
+  }
+  /* A text field that is the content of its glass rings the glass, not itself. */
+  :where(.glass:has(> :is(input, textarea, select):focus-visible)) {
+    outline: 2.5px solid var(--glass-focus-ring, var(--glass-accent));
+    outline-offset: 2px;
+  }
+  :where(.glass[data-lg-ready]:is([data-lg-tier="a"], [data-lg-tier="b"]):has(> :is(input, textarea, select):focus-visible))::after {
+    box-shadow: var(--_lg-depth), 0 0 0 6.5px var(--_lg-halo);
+  }
+  :where(.glass:not([data-lg-ready]):has(> :is(input, textarea, select):focus-visible), .glass[data-lg-tier="c"]:has(> :is(input, textarea, select):focus-visible)) {
+    box-shadow: var(--_lg-shadow), 0 0 0 6.5px var(--_lg-halo);
+  }
+  :where(.glass-item:focus-visible) {
+    outline: 2.5px solid var(--glass-focus-ring, var(--glass-accent));
+    outline-offset: 1px;
+    box-shadow: 0 0 0 4.5px var(--_lg-halo); /* 1 px of halo on both sides of the ring */
+  }
+  /* Controls whose native input is overlaid on a visual part forward focus to that part. */
+  :where(.glass :focus-visible:not(.glass, .glass-item, .glass > :is(input, textarea, select))) {
+    outline: 2.5px solid var(--glass-focus-ring, var(--glass-accent));
+    outline-offset: 2px;
+  }
+  /* Links and buttons in bars and groups get the same halo as items. */
+  :where(:is(.glass-bar, .glass-group) :focus-visible:not(.glass, .glass-item)) {
+    box-shadow: 0 0 0 5.5px var(--_lg-halo);
+  }
+}
+
+/* ── 05-a11y.css */
+/* Accessibility renderings (§2.2 Tier C, §6.1.7) with html[data-glass-*] override twins (Safari
+   has no prefers-reduced-transparency), forced colours, print and no-backdrop-filter fallbacks.
+   JS moves such elements to Tier C and removes its literal frost rules, so these always apply.
+   Without JS (no data-lg-tone), fills follow the tone the label already has: an explicit
+   data-glass-tone, the clear variant's white label, or the color-scheme. */
+@layer liquid-glass {
+  /* ── C-rt: Reduce Transparency, and Tier C forced by data-glass-tier / ?glass-tier ── */
+  :where(.glass[data-lg-tier="c"]) {
+    --_lg-fill: rgb(255 255 255 / .92);
+    text-shadow: none;
+  }
+  :where(.glass[data-lg-tier="c"][data-lg-tone="dark"]) { --_lg-fill: rgb(28 28 30 / .94); }
+  :where(.glass[data-lg-tier="c"]:is(.glass-prominent, [data-glass-tint], [data-lg-tinted])) { --_lg-fill: var(--glass-tint, var(--glass-accent)); }
+  :where(.glass[data-lg-tier="c"])::before {
+    background: var(--_lg-fill);
+    inset: calc(-1 * var(--_lg-bw, 0px));
+    border-radius: inherit;
+    clip-path: none;
+    -webkit-mask: none;
+    mask: none;
+    backdrop-filter: blur(30px);
+    -webkit-backdrop-filter: blur(30px);
+  }
+  :where(.glass[data-lg-tier="c"][data-lg-ready])::after { opacity: calc(.5 * var(--_lg-vis)); }
+
+  :where(:root[data-glass-transparency="reduced"] .glass) { --_lg-fill: rgb(255 255 255 / .92); text-shadow: none; }
+  @supports (color: light-dark(#000, #fff)) {
+    :where(:root[data-glass-transparency="reduced"] .glass:not([data-lg-tone], [data-glass-tone], [data-glass="clear"])) { --_lg-fill: light-dark(rgb(255 255 255 / .92), rgb(28 28 30 / .94)); }
+  }
+  :where(:root[data-glass-transparency="reduced"] .glass:is([data-lg-tone="dark"], [data-glass-tone="dark"]:not([data-lg-tone]), [data-glass="clear"]:not([data-lg-tone]))) { --_lg-fill: rgb(28 28 30 / .94); }
+  :where(:root[data-glass-transparency="reduced"] .glass:is(.glass-prominent, [data-glass-tint], [data-lg-tinted])) { --_lg-fill: var(--glass-tint, var(--glass-accent)); }
+  :where(:root[data-glass-transparency="reduced"] .glass)::before {
+    background: var(--_lg-fill); inset: calc(-1 * var(--_lg-bw, 0px)); border-radius: inherit; clip-path: none; -webkit-mask: none; mask: none;
+    backdrop-filter: blur(30px); -webkit-backdrop-filter: blur(30px);
+  }
+  :where(:root[data-glass-transparency="reduced"] .glass[data-lg-ready])::after { opacity: calc(.5 * var(--_lg-vis)); }
+
+  @media (prefers-reduced-transparency: reduce) {
+    :where(.glass) { --_lg-fill: rgb(255 255 255 / .92); text-shadow: none; }
+    @supports (color: light-dark(#000, #fff)) {
+      :where(.glass:not([data-lg-tone], [data-glass-tone], [data-glass="clear"])) { --_lg-fill: light-dark(rgb(255 255 255 / .92), rgb(28 28 30 / .94)); }
+    }
+    :where(.glass:is([data-lg-tone="dark"], [data-glass-tone="dark"]:not([data-lg-tone]), [data-glass="clear"]:not([data-lg-tone]))) { --_lg-fill: rgb(28 28 30 / .94); }
+    :where(.glass:is(.glass-prominent, [data-glass-tint], [data-lg-tinted])) { --_lg-fill: var(--glass-tint, var(--glass-accent)); }
+    :where(.glass)::before {
+      background: var(--_lg-fill); inset: calc(-1 * var(--_lg-bw, 0px)); border-radius: inherit; clip-path: none; -webkit-mask: none; mask: none;
+      backdrop-filter: blur(30px); -webkit-backdrop-filter: blur(30px);
+    }
+    :where(.glass[data-lg-ready])::after { opacity: calc(.5 * var(--_lg-vis)); }
+  }
+
+  /* ── C-hc: Increase Contrast — near-opaque black/white with a contrasting border ──
+     Accent-coloured fills, text and focus rings switch to the high-contrast accents; custom
+     tints keep their contrast-color() label. The border is not drawn while focused, so the focus
+     ring (04-focus) shows instead. */
+  :where(:root[data-glass-contrast="more"] .glass) {
+    --_lg-fill: rgb(255 255 255 / .97); --_lg-label: #000; --_lg-ink: var(--glass-accent-contrast, #0040dd);
+    text-shadow: none;
+  }
+  @supports (color: light-dark(#000, #fff)) {
+    :where(:root[data-glass-contrast="more"] .glass:not([data-lg-tone], [data-glass-tone], [data-glass="clear"])) {
+      --_lg-fill: light-dark(rgb(255 255 255 / .97), rgb(0 0 0 / .97)); --_lg-label: light-dark(#000, #fff);
+      --_lg-ink: light-dark(var(--glass-accent-contrast, #0040dd), var(--glass-accent-contrast-dark, #409cff));
+    }
+  }
+  :where(:root[data-glass-contrast="more"] .glass:is([data-lg-tone="dark"], [data-glass-tone="dark"]:not([data-lg-tone]), [data-glass="clear"]:not([data-lg-tone]))) {
+    --_lg-fill: rgb(0 0 0 / .97); --_lg-label: #fff; --_lg-ink: var(--glass-accent-contrast-dark, #409cff);
+  }
+  :where(:root[data-glass-contrast="more"] .glass:is(.glass-prominent, [data-glass-tint], [data-lg-tinted])) { --_lg-fill: var(--glass-tint, var(--glass-accent)); --_lg-label: var(--_lg-tint-label); }
+  :where(:root[data-glass-contrast="more"] .glass:is(.glass-prominent:not([data-lg-tinted="custom"], [data-glass-tint]:not([data-glass-tint="accent"])), [data-glass-tint="accent"], [data-lg-tinted="accent"])) {
+    --_lg-fill: var(--glass-accent-contrast, #0040dd); --_lg-label: #fff;
+  }
+  :where(:root[data-glass-contrast="more"] .glass:not(:focus-visible)) { outline: 1.5px solid color-mix(in srgb, currentColor 65%, transparent); outline-offset: -1.5px; }
+  :where(:root[data-glass-contrast="more"] .glass)::before {
+    background: var(--_lg-fill); inset: calc(-1 * var(--_lg-bw, 0px)); border-radius: inherit; clip-path: none; -webkit-mask: none; mask: none;
+    backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  }
+  :where(:root[data-glass-contrast="more"] .glass)::after { display: none; }
+  :where(:root[data-glass-contrast="more"] .glass:is(:focus-visible, :has(> :is(input, textarea, select):focus-visible)), :root[data-glass-contrast="more"] .glass :focus-visible) {
+    outline-color: var(--_lg-ink, var(--glass-accent-contrast, #0040dd));
+  }
+
+  @media (prefers-contrast: more) {
+    :where(.glass) {
+      --_lg-fill: rgb(255 255 255 / .97); --_lg-label: #000; --_lg-ink: var(--glass-accent-contrast, #0040dd);
+      text-shadow: none;
+    }
+    @supports (color: light-dark(#000, #fff)) {
+      :where(.glass:not([data-lg-tone], [data-glass-tone], [data-glass="clear"])) {
+        --_lg-fill: light-dark(rgb(255 255 255 / .97), rgb(0 0 0 / .97)); --_lg-label: light-dark(#000, #fff);
+        --_lg-ink: light-dark(var(--glass-accent-contrast, #0040dd), var(--glass-accent-contrast-dark, #409cff));
+      }
+    }
+    :where(.glass:is([data-lg-tone="dark"], [data-glass-tone="dark"]:not([data-lg-tone]), [data-glass="clear"]:not([data-lg-tone]))) {
+      --_lg-fill: rgb(0 0 0 / .97); --_lg-label: #fff; --_lg-ink: var(--glass-accent-contrast-dark, #409cff);
+    }
+    :where(.glass:is(.glass-prominent, [data-glass-tint], [data-lg-tinted])) { --_lg-fill: var(--glass-tint, var(--glass-accent)); --_lg-label: var(--_lg-tint-label); }
+    :where(.glass:is(.glass-prominent:not([data-lg-tinted="custom"], [data-glass-tint]:not([data-glass-tint="accent"])), [data-glass-tint="accent"], [data-lg-tinted="accent"])) {
+      --_lg-fill: var(--glass-accent-contrast, #0040dd); --_lg-label: #fff;
+    }
+    :where(.glass:not(:focus-visible)) { outline: 1.5px solid color-mix(in srgb, currentColor 65%, transparent); outline-offset: -1.5px; }
+    :where(.glass)::before {
+      background: var(--_lg-fill); inset: calc(-1 * var(--_lg-bw, 0px)); border-radius: inherit; clip-path: none; -webkit-mask: none; mask: none;
+      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+    }
+    :where(.glass)::after { display: none; }
+    :where(.glass:is(:focus-visible, :has(> :is(input, textarea, select):focus-visible)), .glass :focus-visible) {
+      outline-color: var(--_lg-ink, var(--glass-accent-contrast, #0040dd));
+    }
+  }
+
+  /* Latent glass (a lens that is not lifted) must stay invisible in every mode. */
+  :where(:root[data-glass-contrast="more"] .glass[data-lg-latent]:not([data-lg-lifted])) { outline: none; }
+  @media (prefers-contrast: more) {
+    :where(.glass[data-lg-latent]:not([data-lg-lifted])) { outline: none; }
+  }
+
+  /* ── C-none: no backdrop-filter at all ── */
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    :where(.glass) { --_lg-fill: rgb(255 255 255 / .85); }
+    :where(.glass:is([data-lg-tone="dark"], [data-glass-tone="dark"]:not([data-lg-tone]), [data-glass="clear"]:not([data-lg-tone]))) { --_lg-fill: rgb(28 28 30 / .85); }
+  }
+
+  /* ── C-fc: forced colours — system colours, no filters ── */
+  @media (forced-colors: active) {
+    :where(.glass) {
+      background: Canvas;
+      color: CanvasText;
+      outline-color: CanvasText;
+      box-shadow: none;
+      text-shadow: none;
+    }
+    :where(.glass-button, .glass-item) { background: ButtonFace; color: ButtonText; }
+    :where(.glass-item[aria-pressed="true"], .glass-item[aria-current]:not([aria-current="false"])) {
+      forced-color-adjust: none;
+      background: Highlight;
+      color: HighlightText;
+    }
+    :where(.glass)::before,
+    :where(.glass)::after { display: none; }
+    :where(.glass[data-lg-latent]:not([data-lg-lifted])) { background: none; outline: none; }
+  }
+
+  /* ── Print ── */
+  @media print {
+    :where(.glass) { --_lg-fill: #fff; color: #000; box-shadow: none; text-shadow: none; }
+    :where(.glass)::before { inset: 0; clip-path: none; -webkit-mask: none; mask: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
+    :where(.glass)::after { display: none; }
+  }
+}
+
+/* ── 06-debug.css */
+/* Diagnostics overlays: <html data-lg-debug="tiers maps bezel"> (§4.8). */
+@layer liquid-glass {
+  :where(:root[data-lg-debug~="tiers"] .glass[data-lg-tier="a"]) { outline: 2px dashed #30d158; outline-offset: 3px; }
+  :where(:root[data-lg-debug~="tiers"] .glass[data-lg-tier="b"]) { outline: 2px dashed #ffd60a; outline-offset: 3px; }
+  :where(:root[data-lg-debug~="tiers"] .glass[data-lg-tier="c"]) { outline: 2px dashed #ff453a; outline-offset: 3px; }
+  :where(:root[data-lg-debug~="tiers"] .glass[data-lg-tier="none"]) { outline: 2px dashed #8e8e93; outline-offset: 3px; }
+
+  /* The displacement map (grey = y, alpha = x) over the element and its neutral margin. */
+  :where(:root[data-lg-debug~="maps"] .glass[data-lg-tier="a"][data-lg-ready])::after {
+    inset: calc(-1 * var(--_lg-dbg-mm, 0px));
+    border-radius: 0;
+    border-image: none;
+    background: var(--_lg-dbg-map, none) 0 0 / 100% 100% no-repeat;
+  }
+  /* The bezel band as a white ramp. */
+  :where(:root[data-lg-debug~="bezel"] .glass[data-lg-ready])::after {
+    border-image: none;
+    background: var(--_lg-dbg-bezel, none) 0 0 / 100% 100% no-repeat;
+  }
+}
+
+/* ── 20-tabbar.css */
+/* Floating tab bar (§4.7.2): a 62 px capsule of equal-width tabs (28 px glyph over an 11 px
+   label), the flat selection pill under the tabs, the latent lens above them (comp-pill.js),
+   the accessory circle and the minimized state. Behaviour: comp-tabbar.js. */
+@layer liquid-glass {
+  :where(.glass-tabbar) {
+    position: relative;
+    display: flex;
+    align-items: stretch;
+    box-sizing: border-box;
+    height: 62px;
+    padding: 4px;
+    touch-action: pan-y; /* horizontal drags scrub, vertical ones scroll the page */
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+  }
+
+  /* Tabs, and their inert copies in the Tier B lens (.glass-tab-clip > layer > copy). */
+  :where(.glass-tabbar > a, .glass-tabbar > button, .glass-tab-clip > * > *) {
+    position: relative;
+    z-index: 1;
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0 4px;
+    border: 0;
+    border-radius: 9999px;
+    background: none;
+    color: inherit;
+    font: 600 11px/1.15 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    letter-spacing: .01em;
+    text-decoration: none;
+    white-space: nowrap;
+    cursor: pointer;
+    -webkit-user-drag: none;
+    -webkit-tap-highlight-color: transparent;
+    transition: color .15s;
+  }
+  :where(.glass-tabbar > a, .glass-tabbar > button, .glass-tab-clip > * > *) > :where(svg, img) {
+    width: 28px;
+    height: 28px;
+    flex: none;
+  }
+  :where(.glass-tabbar > a, .glass-tabbar > button, .glass-tab-clip > * > *) > :where(span) {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Selection tint: the current tab; while scrubbing, only the tab under the lens. The core's ink
+     keeps the accent legible on this glass's tone and switches to the high-contrast accent under
+     Increase Contrast. */
+  :where(.glass-tabbar > [aria-current]:not([aria-current="false"])) { color: var(--_lg-ink, var(--glass-accent)); }
+  :where(.glass-tabbar[data-lgc-scrubbing] > :is(a, button)) { color: inherit; }
+  :where(.glass-tabbar > .glass-tab-preview, .glass-tab-clip > * > .glass-tab-preview) { color: var(--_lg-ink, var(--glass-accent)); }
+  :where(.glass-tabbar > [aria-disabled="true"]) { cursor: default; opacity: .4; }
+
+  /* The resting pill: a flat capsule under the tabs. JS sets its box and slides it. */
+  :where(.glass-tab-pill) {
+    position: absolute;
+    left: 0;
+    top: 0;
+    z-index: 0;
+    border-radius: 9999px;
+    background: rgb(0 0 0 / .07);
+    pointer-events: none;
+  }
+  :where(.glass-tabbar[data-lg-tone="dark"] > .glass-tab-pill) { background: rgb(255 255 255 / .14); }
+
+  /* The lens: latent glass above the tabs, invisible until it lifts. */
+  :where(.glass-tab-lens) {
+    position: absolute;
+    left: 0;
+    top: 0;
+    z-index: 2;
+    pointer-events: none;
+  }
+  /* Tier B clone-magnify: the copies sit between the lens's frost and its highlights. */
+  :where(.glass-tab-clip) {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    overflow: hidden;
+    border-radius: inherit;
+    opacity: var(--_lg-lift);
+    /* The copies fade out across the rim, so the magnified content meets the frosted original
+       outside the lens without a hard seam (Tier A's rim compresses it instead). */
+    mask-image: linear-gradient(90deg, transparent, #000 16%, #000 84%, transparent);
+  }
+  :where(.glass-tab-clip) > :where(*) {
+    position: absolute;
+    left: 0;
+    top: 0;
+    transform-origin: 0 0;
+  }
+
+  /* Accessory circle beside the bar (same height, 8 px gap in a toolbar). */
+  :where(.glass-tabbar-accessory) {
+    width: 62px;
+    height: 62px;
+    flex: none;
+  }
+  :where(.glass-tabbar-accessory) > :where(svg, img) { width: 26px; height: 26px; }
+  :where(.glass-toolbar:has(> .glass-tabbar)) {
+    gap: 8px;
+    justify-content: space-between;
+  }
+  :where(.glass-toolbar) > :where(.glass-tabbar) { flex: 1 1 auto; min-width: 0; }
+
+  /* Minimized (data-glass-minimize="scroll"): only the current tab's glyph, in a circle. Its label
+     is hidden visually only, so the link keeps its accessible name. */
+  :where(.glass-tabbar[data-lgc-minimized] > :is(a, button):not([aria-current]:not([aria-current="false"]))) {
+    display: none;
+  }
+  :where(.glass-tabbar[data-lgc-minimized] > [aria-current] > :not(svg, img)) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  /* ── Accessibility ──────────────────────────────────────────────────── */
+  /* Increase Contrast: a stronger pill with a contrasting border, like the glass itself. */
+  :where(:root[data-glass-contrast="more"] .glass-tab-pill) {
+    background: rgb(0 0 0 / .14);
+    outline: 1.5px solid color-mix(in srgb, currentColor 65%, transparent);
+    outline-offset: -1.5px;
+  }
+  :where(:root[data-glass-contrast="more"] .glass-tabbar[data-lg-tone="dark"] > .glass-tab-pill) { background: rgb(255 255 255 / .26); }
+  @media (prefers-contrast: more) {
+    :where(.glass-tab-pill) {
+      background: rgb(0 0 0 / .14);
+      outline: 1.5px solid color-mix(in srgb, currentColor 65%, transparent);
+      outline-offset: -1.5px;
+    }
+    :where(.glass-tabbar[data-lg-tone="dark"] > .glass-tab-pill) { background: rgb(255 255 255 / .26); }
+  }
+
+  @media (forced-colors: active) {
+    :where(.glass-tabbar > a, .glass-tabbar > button) { color: CanvasText; }
+    :where(.glass-tab-pill) { forced-color-adjust: none; background: Highlight; }
+    :where(.glass-tabbar > [aria-current]:not([aria-current="false"]), .glass-tabbar > .glass-tab-preview) {
+      forced-color-adjust: none;
+      color: HighlightText;
+    }
+    :where(.glass-tabbar[data-lgc-scrubbing] > :is(a, button):not(.glass-tab-preview)) { color: CanvasText; }
+  }
+}
+
+/* ── 21-segmented.css */
+/* Segmented control (§4.7.5): a 32 px capsule of equal-width segments (no dividers). Each radio
+   is stretched transparent over its label, so hit-testing, focus rings, arrow keys and forms stay
+   native. The white resting pill sits under the labels and the latent lens above them
+   (comp-pill.js). Behaviour: comp-segmented.js. */
+@layer liquid-glass {
+  :where(.glass-segmented) {
+    position: relative;
+    display: flex;
+    align-items: stretch;
+    box-sizing: border-box;
+    height: 32px;
+    min-inline-size: 0; /* <fieldset> */
+    margin: 0;
+    padding: 2px;
+    border: 0;
+    font: 500 13px/1 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    letter-spacing: -0.005em;
+    touch-action: pan-y;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+  }
+  :where(fieldset.glass-segmented) > :where(legend) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  /* Segments, and their inert copies in the Tier B lens (.glass-segmented-clip > layer > copy). */
+  :where(.glass-segmented > label, .glass-segmented-clip > * > *) {
+    position: relative;
+    z-index: 1;
+    flex: 1 1 0;
+    min-width: 0;
+    display: grid;
+    place-items: center;
+    box-sizing: border-box;
+    padding: 0 12px;
+    border-radius: 9999px;
+    color: inherit;
+    white-space: nowrap;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  :where(.glass-segmented > label, .glass-segmented-clip > * > *) > :where(input[type="radio"]) {
+    position: absolute;
+    inset: 0;
+    margin: 0;
+    border: 0;
+    border-radius: inherit;
+    background: none;
+    appearance: none;
+    -webkit-appearance: none;
+    cursor: inherit;
+  }
+  :where(.glass-segmented > label, .glass-segmented-clip > * > *) > :where(:not(input)) {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    pointer-events: none;
+  }
+  :where(.glass-segmented > label:has(> input:checked), .glass-segmented-clip > * > :has(> input:checked)) { font-weight: 600; }
+  :where(.glass-segmented > label:has(> input:disabled)) { cursor: default; opacity: .4; }
+  :where(.glass-segmented > label:has(> input:not(:checked):active) > :not(input)) { opacity: .6; }
+
+  /* The resting pill: white with a soft shadow. JS sets its box and slides it. */
+  :where(.glass-segmented-pill) {
+    position: absolute;
+    left: 0;
+    top: 0;
+    z-index: 0;
+    border-radius: 9999px;
+    background: rgb(255 255 255 / .9);
+    box-shadow: 0 3px 8px rgb(0 0 0 / .12), 0 1px 1px rgb(0 0 0 / .04), 0 0 0 .5px rgb(0 0 0 / .04);
+    pointer-events: none;
+  }
+  :where(.glass-segmented[data-lg-tone="dark"] > .glass-segmented-pill) {
+    background: rgb(255 255 255 / .22);
+    box-shadow: 0 3px 8px rgb(0 0 0 / .18);
+  }
+
+  /* Before the script runs (or without it) there is no pill: the checked segment draws its own. */
+  :where(.glass-segmented:not(:has(> .glass-segmented-pill)) > label:has(> input:checked)) {
+    background: rgb(255 255 255 / .9);
+    box-shadow: 0 3px 8px rgb(0 0 0 / .12), 0 1px 1px rgb(0 0 0 / .04), 0 0 0 .5px rgb(0 0 0 / .04);
+  }
+  @supports (color: light-dark(red, red)) {
+    :where(.glass-segmented:not(:has(> .glass-segmented-pill), [data-glass-tone]) > label:has(> input:checked)) {
+      background: light-dark(rgb(255 255 255 / .9), rgb(255 255 255 / .22));
+    }
+  }
+  :where(.glass-segmented[data-glass-tone="dark"]:not(:has(> .glass-segmented-pill)) > label:has(> input:checked)) {
+    background: rgb(255 255 255 / .22);
+    box-shadow: 0 3px 8px rgb(0 0 0 / .18);
+  }
+
+  /* The lens: latent glass above the labels, invisible until the checked segment is pressed. */
+  :where(.glass-segmented-lens) {
+    position: absolute;
+    left: 0;
+    top: 0;
+    z-index: 2;
+    pointer-events: none;
+  }
+  :where(.glass-segmented-clip) {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    overflow: hidden;
+    border-radius: inherit;
+    opacity: var(--_lg-lift);
+    /* The copies fade out across the rim, so the magnified content meets the frosted original
+       outside the lens without a hard seam (Tier A's rim compresses it instead). */
+    mask-image: linear-gradient(90deg, transparent, #000 16%, #000 84%, transparent);
+  }
+  :where(.glass-segmented-clip) > :where(*) {
+    position: absolute;
+    left: 0;
+    top: 0;
+    transform-origin: 0 0;
+  }
+
+  /* ── Accessibility ──────────────────────────────────────────────────── */
+  /* Opaque tiers read like iOS's solid control: a grey track under a white (dark: grey) pill. */
+  :where(.glass-segmented[data-lg-tier="c"]) { --_lg-fill: rgb(228 228 233 / .97); }
+  :where(.glass-segmented[data-lg-tier="c"][data-lg-tone="dark"]) { --_lg-fill: rgb(44 44 46 / .97); }
+  :where(.glass-segmented[data-lg-tier="c"] > .glass-segmented-pill) { background: #fff; }
+  :where(.glass-segmented[data-lg-tier="c"][data-lg-tone="dark"] > .glass-segmented-pill) { background: rgb(99 99 102); }
+
+  :where(:root[data-glass-contrast="more"] .glass-segmented-pill) { box-shadow: 0 0 0 1.5px rgb(0 0 0 / .7); }
+  :where(:root[data-glass-contrast="more"] .glass-segmented[data-lg-tone="dark"] > .glass-segmented-pill) { box-shadow: 0 0 0 1.5px rgb(255 255 255 / .8); }
+  @media (prefers-contrast: more) {
+    :where(.glass-segmented-pill) { box-shadow: 0 0 0 1.5px rgb(0 0 0 / .7); }
+    :where(.glass-segmented[data-lg-tone="dark"] > .glass-segmented-pill) { box-shadow: 0 0 0 1.5px rgb(255 255 255 / .8); }
+  }
+
+  @media (forced-colors: active) {
+    :where(.glass-segmented > label) { color: CanvasText; }
+    :where(.glass-segmented-pill) { forced-color-adjust: none; background: Highlight; box-shadow: none; }
+    :where(.glass-segmented > label:has(> input:checked)) { forced-color-adjust: none; color: HighlightText; }
+    :where(.glass-segmented:not(:has(> .glass-segmented-pill)) > label:has(> input:checked)) { background: Highlight; box-shadow: none; }
+  }
+}
+
+/* ── 22-switch.css */
+/* Switch (§4.7.3, §5.5): track 63×28, a white 37×24 thumb inset 2 px that lifts into a clear
+   58×38.33 glass lens while pressed. The native checkbox is stretched transparently over the whole
+   label; the injected track follows it. --_lgc-sw-x is the thumb's progress (0 off … 1 on): CSS
+   sets it from :checked, JS writes it inline on the track while the thumb moves.
+   The track is an ancestor of the glass thumb, so it never gets opacity, filter, mask or
+   clip-path (rule R2): its colour lives in ::before instead. */
+@layer liquid-glass {
+  :where(.glass-switch) {
+    --_sw-w: 63px;
+    --_sw-h: 28px;
+    --_sw-tw: 37px;
+    --_sw-th: 24px;
+    --_sw-inset: 2px;
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    vertical-align: middle;
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  :where(.glass-switch:has(> input:disabled)) {
+    cursor: default;
+    color: color-mix(in srgb, currentColor 50%, transparent);
+  }
+
+  /* Enhanced: the input covers the label (and at least a 44 px tall target) but paints nothing. */
+  :where(.glass-switch:has(> .glass-switch-track)) > :where(input) {
+    position: absolute;
+    z-index: 1;
+    inset-inline: 0;
+    top: 50%;
+    width: 100%;
+    height: max(100%, 44px);
+    margin: 0;
+    transform: translateY(-50%);
+    appearance: none;
+    -webkit-appearance: none;
+    opacity: 0;
+    cursor: inherit;
+    touch-action: pan-y;
+  }
+
+  :where(.glass-switch-track) {
+    --_lgc-sw-x: 0;
+    --_sw-on: var(--glass-switch-tint, #34c759);
+    --_sw-off: rgb(120 120 128 / .16);
+    --_sw-halo: rgb(255 255 255 / .9);
+    position: relative;
+    flex: none;
+    box-sizing: border-box;
+    width: var(--_sw-w);
+    height: var(--_sw-h);
+    border-radius: calc(var(--_sw-h) / 2);
+    pointer-events: none;
+  }
+  :where(.glass-switch > input:checked + .glass-switch-track) { --_lgc-sw-x: 1; }
+  /* Dark off track: a dark color-scheme, or a dark tone/backdrop hint on an ancestor. */
+  @supports (color: light-dark(red, red)) {
+    :where(.glass-switch-track) {
+      --_sw-off: light-dark(rgb(120 120 128 / .16), rgb(120 120 128 / .32));
+      --_sw-halo: light-dark(rgb(255 255 255 / .9), rgb(0 0 0 / .8));
+    }
+  }
+  :where([data-glass-tone="dark"], [data-glass-backdrop="dark"]) :where(.glass-switch-track) {
+    --_sw-off: rgb(120 120 128 / .32);
+    --_sw-halo: rgb(0 0 0 / .8);
+  }
+
+  /* Off → on in OKLab, by the thumb's position. */
+  :where(.glass-switch-track)::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: color-mix(in oklab, var(--_sw-on) calc(clamp(0, var(--_lgc-sw-x), 1) * 100%), var(--_sw-off));
+  }
+
+  /* A zero-size carrier: the thumb's own translate and scale belong to the glass core. */
+  :where(.glass-switch-rail) {
+    position: absolute;
+    top: var(--_sw-inset);
+    inset-inline-start: var(--_sw-inset);
+    width: 0;
+    height: 0;
+    translate: calc(var(--_lgc-sw-x) * (var(--_sw-w) - var(--_sw-tw) - 2 * var(--_sw-inset))) 0;
+  }
+  :where(.glass-switch:dir(rtl) .glass-switch-rail) {
+    translate: calc(-1 * var(--_lgc-sw-x) * (var(--_sw-w) - var(--_sw-tw) - 2 * var(--_sw-inset))) 0;
+  }
+
+  :where(.glass-switch-thumb) {
+    position: absolute;
+    top: 0;
+    inset-inline-start: 0;
+    width: var(--_sw-tw);
+    height: var(--_sw-th);
+  }
+
+  /* The resting white thumb; it hands over to the glass as the lens lifts. */
+  :where(.glass-switch-face) {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: #fff;
+    box-shadow: 0 3px 8px rgb(0 0 0 / .15), 0 1px 2px rgb(0 0 0 / .08), 0 0 0 .5px rgb(0 0 0 / .04);
+    opacity: calc(1 - var(--_lg-lift));
+  }
+
+  :where(.glass-switch > input:disabled + .glass-switch-track)::before { opacity: .5; }
+  :where(.glass-switch > input:disabled + .glass-switch-track .glass-switch-face) { opacity: .6; }
+
+  /* ── Increase Contrast: a stronger off track, a darker green and an outline ── */
+  :where(:root[data-glass-contrast="more"] .glass-switch-track) {
+    --_sw-on: var(--glass-switch-tint, #248a3d);
+    --_sw-off: rgb(120 120 128 / .42);
+    outline: 1px solid color-mix(in srgb, currentColor 55%, transparent);
+    outline-offset: -1px;
+  }
+  @media (prefers-contrast: more) {
+    :where(.glass-switch-track) {
+      --_sw-on: var(--glass-switch-tint, #248a3d);
+      --_sw-off: rgb(120 120 128 / .42);
+      outline: 1px solid color-mix(in srgb, currentColor 55%, transparent);
+      outline-offset: -1px;
+    }
+  }
+
+  /* Focus is forwarded from the invisible input to the track (§6.1.3). */
+  :where(.glass-switch > input:focus-visible + .glass-switch-track) {
+    outline: 2.5px solid var(--glass-focus-ring, var(--glass-accent));
+    outline-offset: 2px;
+    box-shadow: 0 0 0 6.5px var(--_sw-halo);
+  }
+
+  /* ── Forced colours: system colours; on = Highlight ── */
+  @media (forced-colors: active) {
+    :where(.glass-switch-track) {
+      outline: 1px solid CanvasText;
+      outline-offset: -1px;
+    }
+    :where(.glass-switch-face) {
+      forced-color-adjust: none;
+      background: CanvasText;
+      box-shadow: none;
+      opacity: 1;
+    }
+    :where(.glass-switch > input:checked + .glass-switch-track) { outline-color: Highlight; }
+    :where(.glass-switch > input:checked + .glass-switch-track)::before {
+      forced-color-adjust: none;
+      background: Highlight;
+    }
+    :where(.glass-switch > input:checked + .glass-switch-track .glass-switch-face) { background: HighlightText; }
+    :where(.glass-switch > input:disabled + .glass-switch-track) { outline-color: GrayText; }
+    :where(.glass-switch > input:disabled + .glass-switch-track .glass-switch-face) { background: GrayText; }
+    :where(.glass-switch > input:focus-visible + .glass-switch-track) {
+      outline: 2px solid Highlight;
+      outline-offset: 2px;
+    }
+  }
+}
+
+/* ── 23-slider.css */
+/* Slider (§4.7.4, §5.6): a 6 px track (radius 3) with an accent fill, and a white 37×24 knob that
+   lifts into a clear 58×38.33 glass lens while grabbed. The range input covers the wrapper for
+   focus and assistive technology but takes no pointer input; its invisible native thumb keeps the
+   knob's size, so the native value ↔ position mapping matches the visual one.
+   --glass-value (0–1, written by JS) places the knob and the fill. The rail carries the knob, so it
+   never gets opacity, filter, mask or clip-path (rule R2). */
+@layer liquid-glass {
+  :where(.glass-slider) {
+    --_sl-kw: 37px;
+    --_sl-kh: 24px;
+    --_sl-th: 6px;
+    --_sl-empty: rgb(120 120 128 / .2);
+    --_sl-halo: rgb(255 255 255 / .9);
+    position: relative;
+    display: block;
+    box-sizing: border-box;
+    min-width: 120px;
+    height: 44px;
+    touch-action: pan-y;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  /* Dark track: a dark color-scheme, or a dark tone/backdrop hint on an ancestor. */
+  @supports (color: light-dark(red, red)) {
+    :where(.glass-slider) {
+      --_sl-empty: light-dark(rgb(120 120 128 / .2), rgb(120 120 128 / .36));
+      --_sl-halo: light-dark(rgb(255 255 255 / .9), rgb(0 0 0 / .8));
+    }
+  }
+  :where([data-glass-tone="dark"], [data-glass-backdrop="dark"]) :where(.glass-slider) {
+    --_sl-empty: rgb(120 120 128 / .36);
+    --_sl-halo: rgb(0 0 0 / .8);
+  }
+
+  /* Enhanced: the input stays in place for focus and assistive technology, and paints nothing. */
+  :where(.glass-slider:has(> .glass-slider-track)) > :where(input[type="range"]) {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    appearance: none;
+    -webkit-appearance: none;
+    background: none;
+    opacity: 0;
+    pointer-events: none;
+  }
+  :where(.glass-slider:has(> .glass-slider-track)) > :where(input[type="range"])::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: var(--_sl-kw);
+    height: var(--_sl-kh);
+    opacity: 0;
+  }
+  :where(.glass-slider:has(> .glass-slider-track)) > :where(input[type="range"])::-moz-range-thumb {
+    width: var(--_sl-kw);
+    height: var(--_sl-kh);
+    border: 0;
+    opacity: 0;
+  }
+
+  :where(.glass-slider-track) {
+    position: absolute;
+    inset-inline: 0;
+    top: 50%;
+    height: var(--_sl-th);
+    margin-top: calc(var(--_sl-th) / -2);
+    border-radius: calc(var(--_sl-th) / 2);
+    background: var(--_sl-empty);
+    pointer-events: none;
+  }
+  /* The fill runs from the start to the knob's centre. */
+  :where(.glass-slider-fill) {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: var(--glass-slider-tint, var(--glass-accent, #0a84ff));
+    clip-path: inset(0 calc(var(--_sl-kw) / 2 + (1 - var(--glass-value, 0)) * (100% - var(--_sl-kw))) 0 0 round calc(var(--_sl-th) / 2));
+  }
+  :where(.glass-slider:dir(rtl) .glass-slider-fill) {
+    clip-path: inset(0 0 0 calc(var(--_sl-kw) / 2 + (1 - var(--glass-value, 0)) * (100% - var(--_sl-kw))) round calc(var(--_sl-th) / 2));
+  }
+
+  /* Tick marks for stepped sliders: one dot per step; those under the fill are light. */
+  :where(.glass-slider-ticks) {
+    position: absolute;
+    inset: 0;
+  }
+  :where(.glass-slider-ticks) > :where(span) {
+    position: absolute;
+    top: 50%;
+    inset-inline-start: calc(var(--_sl-kw) / 2 + var(--k) * (100% - var(--_sl-kw)));
+    width: 3px;
+    height: 3px;
+    margin: -1.5px;
+    border-radius: 50%;
+    background: rgb(120 120 128 / .75);
+  }
+  :where(.glass-slider-fill > .glass-slider-ticks) > :where(span) { background: rgb(255 255 255 / .8); }
+
+  /* A zero-size carrier at the knob's centre: the knob's own translate and scale belong to the core. */
+  :where(.glass-slider-rail) {
+    position: absolute;
+    top: 50%;
+    inset-inline-start: calc(var(--_sl-kw) / 2);
+    width: 0;
+    height: 0;
+    translate: calc(var(--glass-value, 0) * var(--_lgc-sl-travel, 0px) + var(--_lgc-sl-over, 0px)) 0;
+    pointer-events: none;
+  }
+  :where(.glass-slider:dir(rtl) .glass-slider-rail) {
+    translate: calc(-1 * (var(--glass-value, 0) * var(--_lgc-sl-travel, 0px) + var(--_lgc-sl-over, 0px))) 0;
+  }
+  :where(.glass-slider-knob) {
+    position: absolute;
+    left: calc(var(--_sl-kw) / -2);
+    top: calc(var(--_sl-kh) / -2);
+    width: var(--_sl-kw);
+    height: var(--_sl-kh);
+  }
+
+  /* The resting white knob; it hands over to the glass as the lens lifts. */
+  :where(.glass-slider-face) {
+    --_sl-face-shadow: 0 3px 8px rgb(0 0 0 / .15), 0 1px 2px rgb(0 0 0 / .08), 0 0 0 .5px rgb(0 0 0 / .04);
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: #fff;
+    box-shadow: var(--_sl-face-shadow);
+    opacity: calc(1 - var(--_lg-lift));
+  }
+
+  /* Tier B clone-magnify: a copy of the track in the lens, 1.12× about the knob's centre. The copy
+     cancels the knob's own composed scale (lift growth, stretch), so it is 1.12× on screen. It
+     fades out towards the rim, where the frosted real track shows instead. */
+  :where(.glass-slider-lens) {
+    display: none;
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    overflow: hidden;
+    opacity: var(--_lg-lift);
+    -webkit-mask-image: linear-gradient(90deg, transparent 4%, #000 30%, #000 70%, transparent 96%);
+    mask-image: linear-gradient(90deg, transparent 4%, #000 30%, #000 70%, transparent 96%);
+  }
+  :where(.glass-slider-knob[data-lg-tier="b"] > .glass-slider-lens) { display: block; }
+  :where(.glass-slider-magnifier) {
+    position: absolute;
+    inset: 0;
+    scale: calc(1.12 / var(--_lg-scale-x, 1)) calc(1.12 / var(--_lg-scale-y, 1));
+  }
+  :where(.glass-slider-magnifier > .glass-slider-track) {
+    inset-inline: auto;
+    inset-inline-start: calc(-1 * (var(--glass-value, 0) * var(--_lgc-sl-travel, 0px) + var(--_lgc-sl-over, 0px)));
+    width: calc(var(--_lgc-sl-travel, 0px) + var(--_sl-kw));
+  }
+
+  :where(.glass-slider > input:disabled ~ .glass-slider-track) { opacity: .45; }
+  :where(.glass-slider > input:disabled ~ .glass-slider-rail .glass-slider-face) { box-shadow: 0 1px 3px rgb(0 0 0 / .12), 0 0 0 .5px rgb(0 0 0 / .06); }
+
+  /* ── Increase Contrast: a stronger track and an outline ── */
+  :where(:root[data-glass-contrast="more"] .glass-slider) { --_sl-empty: rgb(120 120 128 / .45); }
+  :where(:root[data-glass-contrast="more"] .glass-slider-track) { outline: 1px solid color-mix(in srgb, currentColor 55%, transparent); }
+  @media (prefers-contrast: more) {
+    :where(.glass-slider) { --_sl-empty: rgb(120 120 128 / .45); }
+    :where(.glass-slider-track) { outline: 1px solid color-mix(in srgb, currentColor 55%, transparent); }
+  }
+
+  /* Focus is forwarded from the invisible input to the knob (§6.1.3). */
+  :where(.glass-slider > input:focus-visible ~ .glass-slider-rail .glass-slider-face) {
+    outline: 2.5px solid var(--glass-focus-ring, var(--glass-accent));
+    outline-offset: 2px;
+    box-shadow: var(--_sl-face-shadow), 0 0 0 6.5px var(--_sl-halo);
+  }
+
+  /* ── Forced colours: system colours; the fill is Highlight ── */
+  @media (forced-colors: active) {
+    :where(.glass-slider-track) {
+      forced-color-adjust: none;
+      background: Canvas;
+      outline: 1px solid CanvasText;
+    }
+    :where(.glass-slider-fill) { background: Highlight; }
+    :where(.glass-slider-ticks) > :where(span) { background: CanvasText; }
+    :where(.glass-slider-fill > .glass-slider-ticks) > :where(span) { background: HighlightText; }
+    :where(.glass-slider-face) {
+      forced-color-adjust: none;
+      background: ButtonFace;
+      box-shadow: none;
+      outline: 1px solid ButtonText;
+      opacity: 1;
+    }
+    :where(.glass-slider > input:disabled ~ .glass-slider-track) { opacity: 1; outline-color: GrayText; }
+    :where(.glass-slider > input:disabled ~ .glass-slider-track .glass-slider-fill) { background: GrayText; }
+    :where(.glass-slider > input:disabled ~ .glass-slider-rail .glass-slider-face) { outline-color: GrayText; }
+    :where(.glass-slider > input:focus-visible ~ .glass-slider-rail .glass-slider-face) {
+      outline: 2px solid Highlight;
+      outline-offset: 2px;
+    }
+  }
+}
+
+/* ── 24-search.css */
+/* Search field (§4.7.6): a <search> glass capsule, 44 px tall, holding a magnifier and the native
+   input. While active (data-lgc-active, written by JS) the field makes room at its trailing edge
+   for a separate circular glass Cancel button that JS materializes there.
+   data-glass-collapsible: at rest (inactive) the field is a 44 px circle showing only the magnifier;
+   focusing it expands it to its layout width.
+   JS gives the field refraction .7 and a 10 px bezel as component defaults; data-glass-*
+   attributes or --glass-* properties on the field override them. The core rings the capsule
+   while its input has keyboard focus. */
+@layer liquid-glass {
+  :where(.glass-search) {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    box-sizing: border-box;
+    height: 44px;
+    min-width: 44px;
+    padding-inline: 13px 12px;
+    font: 400 17px/1.2 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    letter-spacing: -0.01em;
+    cursor: text;
+  }
+
+  :where(.glass-search-icon) {
+    flex: none;
+    width: 19px;
+    height: 19px;
+    color: color-mix(in srgb, currentColor 64%, transparent);
+  }
+
+  :where(.glass-search) > :where(input) {
+    flex: 1 1 auto;
+    align-self: stretch;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    letter-spacing: inherit;
+    text-shadow: inherit;
+    caret-color: var(--glass-accent);
+    outline: none;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  :where(.glass-search) > :where(input)::placeholder {
+    color: color-mix(in srgb, currentColor 70%, transparent);
+    opacity: 1;
+  }
+  :where(.glass-search) > :where(input)::-webkit-search-decoration { -webkit-appearance: none; }
+  /* The native clear control, drawn as an iOS "xmark.circle.fill". */
+  :where(.glass-search) > :where(input)::-webkit-search-cancel-button {
+    -webkit-appearance: none;
+    appearance: none;
+    flex: none;
+    width: 17px;
+    height: 17px;
+    margin-inline-start: 6px;
+    background: color-mix(in srgb, currentColor 45%, transparent);
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M10 0a10 10 0 1 1 0 20a10 10 0 0 1 0-20zM6.6 5.4 5.4 6.6 8.8 10l-3.4 3.4 1.2 1.2 3.4-3.4 3.4 3.4 1.2-1.2-3.4-3.4 3.4-3.4-1.2-1.2-3.4 3.4z' fill-rule='evenodd'/%3E%3C/svg%3E") center / contain no-repeat;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M10 0a10 10 0 1 1 0 20a10 10 0 0 1 0-20zM6.6 5.4 5.4 6.6 8.8 10l-3.4 3.4 1.2 1.2 3.4-3.4 3.4 3.4 1.2-1.2-3.4-3.4 3.4-3.4-1.2-1.2-3.4 3.4z' fill-rule='evenodd'/%3E%3C/svg%3E") center / contain no-repeat;
+    cursor: default;
+  }
+
+  /* Active: room for the Cancel circle (44 px + 8 px gap) beside the field. */
+  :where(.glass-search[data-lgc-active]) {
+    margin-inline-end: 52px;
+  }
+  :where(.glass-search-cancel) {
+    position: absolute;
+    inset-inline-start: calc(100% + 8px);
+    top: calc(50% - 22px);
+    cursor: pointer;
+  }
+  :where(.glass-search-cancel) > :where(svg) { width: 17px; height: 17px; }
+  :where(.glass-search-cancel[hidden]) { display: none; }
+
+  /* Collapsible, at rest: a magnifier circle. The input covers it, so a click or Tab focuses it. */
+  :where(.glass-search[data-glass-collapsible]:not([data-lgc-active])) {
+    max-width: 44px;
+    padding: 0;
+    justify-content: center;
+    cursor: pointer;
+  }
+  :where(.glass-search[data-glass-collapsible]:not([data-lgc-active])) > :where(input) {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    opacity: 0;
+    cursor: pointer;
+  }
+
+  /* Without the script (it injects Cancel), focus or a query expands the circle at once; the
+     script animates the same change. Supply the .glass-search-icon yourself for this case. */
+  :where(.glass-search[data-glass-collapsible]:not(:has(> .glass-search-cancel)):is(:focus-within, :has(> input:not(:placeholder-shown)))) {
+    max-width: none;
+    padding-inline: 13px 12px;
+    justify-content: normal;
+    cursor: text;
+  }
+  :where(.glass-search[data-glass-collapsible]:not(:has(> .glass-search-cancel)):is(:focus-within, :has(> input:not(:placeholder-shown)))) > :where(input) {
+    position: static;
+    width: auto;
+    opacity: 1;
+    cursor: auto;
+  }
+
+  /* Disabled: dimmed like the other controls. */
+  :where(.glass-search:has(> input:disabled)) { cursor: default; }
+  :where(.glass-search:has(> input:disabled)) > :where(input) { color: color-mix(in srgb, currentColor 45%, transparent); }
+  :where(.glass-search:has(> input:disabled)) > :where(.glass-search-icon) { opacity: .45; }
+
+  @media (forced-colors: active) {
+    :where(.glass-search) > :where(input)::placeholder { color: GrayText; }
+    :where(.glass-search) > :where(input)::-webkit-search-cancel-button { background: CanvasText; }
+    :where(.glass-search-icon) { color: CanvasText; }
+    :where(.glass-search:has(> input:disabled)) > :where(input, .glass-search-icon) { color: GrayText; }
+    :where(.glass-search:has(> input:disabled)) > :where(.glass-search-icon) { opacity: 1; }
+  }
+}
+
+/* ── 25-sheet.css */
+/* Sheet (§4.7.7): <dialog class="glass glass-sheet">. Tier B by default: a large surface (JS sets
+   it unless data-glass-tier says otherwise). Two layouts:
+   - bottom (viewport < 600 px, or data-glass-layout="bottom"): inset 8 px, device-concentric
+     corners, detents medium (top at 50 %) and large (top 48 px from the top); a grabber drags
+     between them and a flick down dismisses. The fill goes from α .55 at medium to .92 at large.
+   - panel (otherwise, or data-glass-layout="panel"): a centred floating panel, radius 26.
+   Percentages resolve against the containing block: the viewport for showModal(), the positioned
+   ancestor for show() (a sheet inside a phone mock, say).
+   Content scrolls in .glass-sheet-body (JS wraps the dialog's content in one if it has none). The
+   dialog itself must not scroll: its glass layers would scroll away with the content. The body
+   must not round its clip either: in Chromium a rounded overflow clip isolates the backdrop of any
+   glass inside it (a nested button then paints a dark rectangle); its padding keeps content clear
+   of the sheet's corners instead. */
+@layer liquid-glass {
+  /* ── Panel (default) ── */
+  :where(.glass-sheet) {
+    --_lgc-sheet-mode: panel;
+    /* The sheet's own fill (not inherited, so nested glass keeps the page's). */
+    --glass-fill-opacity: calc(.55 + .37 * var(--_lgc-sheet-t, 0));
+    --glass-fill-opacity-dark: calc(.62 + .32 * var(--_lgc-sheet-t, 0));
+    box-sizing: border-box;
+    inset: 0;
+    width: min(560px, calc(100% - 32px));
+    max-width: none;
+    height: fit-content;
+    max-height: min(760px, calc(100% - 64px));
+    margin: auto;
+    padding: 0;
+    border: 0;
+    border-radius: 26px;
+    background: none;
+    overflow: visible;
+    font: 400 17px/1.35 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    letter-spacing: -0.01em;
+  }
+  :where(.glass-sheet[open]) {
+    display: flex;
+    flex-direction: column;
+  }
+  /* The top layer needs fixed (modal) or absolute (show()); .glass would make it relative. */
+  :where(.glass-sheet:modal) { position: fixed; }
+  :where(.glass-sheet:not(:modal)) { position: absolute; }
+  :where(.glass-sheet)::backdrop {
+    background: rgb(0 0 0 / calc(.2 * var(--_lg-mat, 1) * var(--_lgc-sheet-dim, 1)));
+  }
+
+  :where(.glass-sheet-body) {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    overscroll-behavior: contain;
+    box-sizing: border-box;
+    padding: 22px 24px 24px;
+  }
+  :where(.glass-sheet-grabber) { display: none; }
+
+  /* ── Bottom sheet ── */
+  @media (max-width: 599.98px) {
+    :where(.glass-sheet:not([data-glass-layout="panel"])) {
+      --_lgc-sheet-mode: bottom;
+      inset: auto 8px 8px;
+      width: auto;
+      height: calc(50% - 8px);
+      max-height: none;
+      margin: 0;
+      border-radius: calc(var(--glass-device-radius, 48px) - 8px);
+    }
+    :where(.glass-sheet:not([data-glass-layout="panel"])[data-glass-detent="large"]) {
+      --_lgc-sheet-t: 1;
+      height: calc(100% - 56px);
+    }
+    :where(.glass-sheet:not([data-glass-layout="panel"])) > :where(.glass-sheet-body) { padding: 26px 20px 20px; }
+    :where(.glass-sheet:not([data-glass-layout="panel"])) > :where(.glass-sheet-grabber) { display: block; }
+  }
+  :where(.glass-sheet[data-glass-layout="bottom"]) {
+    --_lgc-sheet-mode: bottom;
+    inset: auto 8px 8px;
+    width: auto;
+    height: calc(50% - 8px);
+    max-height: none;
+    margin: 0;
+    border-radius: calc(var(--glass-device-radius, 48px) - 8px);
+  }
+  :where(.glass-sheet[data-glass-layout="bottom"][data-glass-detent="large"]) {
+    --_lgc-sheet-t: 1;
+    height: calc(100% - 56px);
+  }
+  :where(.glass-sheet[data-glass-layout="bottom"]) > :where(.glass-sheet-body) { padding: 26px 20px 20px; }
+  :where(.glass-sheet[data-glass-layout="bottom"]) > :where(.glass-sheet-grabber) { display: block; }
+
+  /* The grabber: a 36 × 5 pill on a wider strip that is easy to drag. The injected one is a
+     button (Enter/Space cycle the detents), so it loses the button look. */
+  :where(.glass-sheet-grabber) {
+    position: absolute;
+    z-index: 1;
+    top: 0;
+    inset-inline: 25%;
+    height: 24px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 12px;
+    background: none;
+    color: inherit;
+    font: inherit;
+    appearance: none;
+    cursor: grab;
+    touch-action: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  :where(.glass-sheet-grabber:active) { cursor: grabbing; }
+  :where(.glass-sheet-grabber)::before {
+    content: "";
+    position: absolute;
+    top: 6px;
+    left: calc(50% - 18px);
+    width: 36px;
+    height: 5px;
+    border-radius: 3px;
+    background: color-mix(in srgb, currentColor 32%, transparent);
+  }
+
+  @media (forced-colors: active) {
+    /* The reset above removed the UA dialog background; forced colours need an opaque one. */
+    :where(.glass-sheet) { background: Canvas; }
+    :where(.glass-sheet-grabber)::before { background: CanvasText; }
+  }
+}
+
+/* ── 26-menu.css */
+/* Menu / popover (§4.7.8): a [popover] glass panel (radius 22, fill .55 / .62, no tone flip) that
+   springs out of its invoker. Placement: below the invoker, start-aligned, flipping to above /
+   end-aligned when it would not fit; data-glass-placement="cover" opens it over the invoker, as
+   iOS bar-button menus do. CSS anchor positioning places it where supported (JS names the anchor on
+   beforetoggle; without JS the popover's implicit anchor is used); JS places it otherwise.
+   Motion never uses opacity (that would blank the glass): without JS, @starting-style transitions
+   --_lg-mat and scale; with JS the core materializes it, and CSS keeps a closing popover rendered
+   (display/overlay allow-discrete) while it dematerializes. */
+@layer liquid-glass {
+  :where(.glass-menu) {
+    /* The menu's own fill (not inherited, so nested glass keeps the page's). */
+    --glass-fill-opacity: .55;
+    --glass-fill-opacity-dark: .62;
+    box-sizing: border-box;
+    min-width: 220px;
+    max-width: min(320px, calc(100vw - 16px));
+    padding: 6px;
+    border: 0;
+    border-radius: 22px;
+    background: none;
+    overflow: visible;
+    font: 400 17px/1.25 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    letter-spacing: -0.01em;
+  }
+  /* Popovers are fixed in the top layer; .glass would otherwise make them relative. */
+  :where(.glass-menu[popover]) {
+    position: fixed;
+    transition: display .4s allow-discrete, overlay .4s allow-discrete;
+  }
+  :where(.glass-menu[popover]:not(:popover-open)) { pointer-events: none; }
+
+  @supports (position-area: block-end) {
+    :where(.glass-menu[popover]) {
+      inset: auto;
+      margin: 6px 0;
+      position-area: block-end span-inline-end;
+      position-try-fallbacks: flip-block, flip-inline, flip-block flip-inline;
+    }
+    :where(.glass-menu[popover][data-glass-placement="cover"]) {
+      margin: 0;
+      position-area: span-block-end span-inline-end;
+    }
+  }
+
+  /* No JS (the core never tagged it): a CSS-only spring out of the anchor side. */
+  :where(.glass-menu[popover]:not([data-lg-tier])) {
+    --_lg-mat: 0;
+    scale: .6;
+    transform-origin: top;
+    transition: --_lg-mat .3s ease-out, scale var(--glass-duration-unlift, 720ms) var(--glass-ease-unlift, ease-out),
+                display .4s allow-discrete, overlay .4s allow-discrete;
+  }
+  :where(.glass-menu[popover]:not([data-lg-tier]):popover-open) { --_lg-mat: 1; scale: 1; }
+  @starting-style {
+    :where(.glass-menu[popover]:not([data-lg-tier]):popover-open) { --_lg-mat: 0; scale: .6; }
+  }
+  :where(.glass-menu[popover]:not([data-lg-tier])) > * { opacity: var(--_lg-mat); }
+  @media (prefers-reduced-motion: reduce) {
+    :where(.glass-menu[popover]:not([data-lg-tier])) { scale: 1; }
+  }
+
+  /* ── Items ── */
+  :where(.glass-menu) :where([role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"]) {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 44px;
+    margin: 0;
+    padding: 0 14px;
+    border: 0;
+    border-radius: 16px;
+    background: none;
+    color: inherit;
+    font: inherit;
+    letter-spacing: inherit;
+    text-align: start;
+    text-decoration: none;
+    white-space: nowrap;
+    cursor: default;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  /* Glyphs trail the label, as in iOS menus. */
+  :where(.glass-menu) :where([role^="menuitem"]) > :where(svg) {
+    order: 1;
+    flex: none;
+    width: 20px;
+    height: 20px;
+    margin-inline-start: auto;
+  }
+  :where(.glass-menu) :where([role^="menuitem"]:hover) { background: rgb(0 0 0 / .07); }
+  :where(.glass-menu) :where([role^="menuitem"]:active) { background: rgb(0 0 0 / .13); }
+  :where(.glass-menu[data-lg-tone="dark"]) :where([role^="menuitem"]:hover) { background: rgb(255 255 255 / .1); }
+  :where(.glass-menu[data-lg-tone="dark"]) :where([role^="menuitem"]:active) { background: rgb(255 255 255 / .17); }
+  /* Keyboard focus: an accent row, as in macOS menus, instead of a ring. */
+  :where(.glass-menu) :where([role^="menuitem"]:focus-visible) {
+    outline: none;
+    background: var(--glass-accent);
+    color: #fff;
+    text-shadow: none;
+  }
+  :where(.glass-menu) :where([role^="menuitem"]:is(:disabled, [aria-disabled="true"])) {
+    background: none;
+    color: color-mix(in srgb, currentColor 35%, transparent);
+  }
+  :where(.glass-menu) :where(.glass-destructive) { color: #ff3b30; }
+  :where(.glass-menu[data-lg-tone="dark"]) :where(.glass-destructive) { color: #ff453a; }
+
+  /* Checkable items reserve a leading column for the checkmark. */
+  :where(.glass-menu) :where([role="menuitemcheckbox"], [role="menuitemradio"]) { padding-inline-start: 38px; }
+  :where(.glass-menu) :where([role="menuitemcheckbox"], [role="menuitemradio"])[aria-checked="true"]::before {
+    content: "";
+    position: absolute;
+    inset-inline-start: 13px;
+    top: calc(50% - 8px);
+    width: 16px;
+    height: 16px;
+    background: currentColor;
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M2.5 8.6 6.2 12.3 13.5 3.8' fill='none' stroke='%23000' stroke-width='2.1' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M2.5 8.6 6.2 12.3 13.5 3.8' fill='none' stroke='%23000' stroke-width='2.1' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
+  }
+
+  :where(.glass-menu) :where(hr, [role="separator"]) {
+    height: 1px;
+    margin: 5px 12px;
+    border: 0;
+    background: color-mix(in srgb, currentColor 14%, transparent);
+  }
+  :where(.glass-menu-label) {
+    padding: 8px 14px 4px;
+    font-size: 13px;
+    font-weight: 500;
+    color: color-mix(in srgb, currentColor 60%, transparent);
+  }
+
+  @media (forced-colors: active) {
+    /* The reset above removed the UA popover background; forced colours need an opaque one. */
+    :where(.glass-menu) { background: Canvas; }
+    :where(.glass-menu) :where([role^="menuitem"]:is(:hover, :focus-visible)) {
+      forced-color-adjust: none;
+      background: Highlight;
+      color: HighlightText;
+    }
+    :where(.glass-menu) :where(hr, [role="separator"]) { background: CanvasText; }
+    /* currentColor backgrounds are replaced in forced colours; name the system colours. */
+    :where(.glass-menu) :where([role="menuitemcheckbox"], [role="menuitemradio"])[aria-checked="true"]::before { background: CanvasText; }
+    :where(.glass-menu) :where([role="menuitemcheckbox"], [role="menuitemradio"]):is(:hover, :focus-visible)[aria-checked="true"]::before { background: HighlightText; }
+  }
+}
+
+/* ── 27-scroll-edge.css */
+/* Scroll edge effect (§4.7.9, I9): a band pinned under floating bars that progressively blurs and
+   fades the content scrolling beneath them. It is not glass itself, so its own layers may be masked
+   (it must never wrap glass).
+   soft: three stacked backdrop blurs (2 / 6 / 12 px) with shrinking gradient masks, over a scrim of
+         the page colour from α .6 to 0. Without JS the band has the first two layers; JS injects
+         the third (.glass-scroll-edge-layer).
+   hard: one uniform blur(20px) band with an α .8 fill.
+   Under a dark-tone bar (data-lgc-tone="dark", mirrored from the bar by JS; without a bar, an
+   author's data-tone="dark") soft becomes a dim and hard a dark fill.
+   Height = bar extent + 20 px (JS measures it; --glass-scroll-edge-size overrides).
+   The "Clear ↔ Tinted" preference fades the band out with the glass frost toward its clear end:
+   at pure clear (t = −1) nothing is layered over the view.
+   Place the band before its bar in the DOM, or below it with z-index. */
+@layer liquid-glass {
+  :where(.glass-scroll-edge) {
+    --_glass-edge-c: var(--glass-scroll-edge-color, var(--_lgc-edge-page, #fff));
+    --_glass-edge-dir: to bottom;
+    position: fixed;
+    inset-inline: 0;
+    top: 0;
+    height: var(--glass-scroll-edge-size, var(--_lgc-edge-size, 72px));
+    pointer-events: none;
+    background: linear-gradient(var(--_glass-edge-dir), color-mix(in srgb, var(--_glass-edge-c) calc(60% * (1 + var(--_lg-tn, 0))), transparent), transparent);
+  }
+  :where(.glass-scroll-edge[data-edge="bottom"]) {
+    --_glass-edge-dir: to top;
+    top: auto;
+    bottom: 0;
+  }
+
+  :where(.glass-scroll-edge)::before,
+  :where(.glass-scroll-edge)::after,
+  :where(.glass-scroll-edge) > :where(.glass-scroll-edge-layer) {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+  /* Each layer blurs what the previous ones produced, so the blur grows toward the edge. */
+  :where(.glass-scroll-edge)::before {
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+    mask: linear-gradient(var(--_glass-edge-dir), #000 0 55%, transparent);
+  }
+  :where(.glass-scroll-edge)::after {
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    mask: linear-gradient(var(--_glass-edge-dir), #000 0 28%, transparent 62%);
+  }
+  :where(.glass-scroll-edge) > :where(.glass-scroll-edge-layer) {
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    mask: linear-gradient(var(--_glass-edge-dir), #000 0 10%, transparent 34%);
+  }
+  /* Clear preference: each blurring layer fades (on the band itself, an opacity would make it a
+     Backdrop Root and blank the layers inside it). */
+  :where(.glass-scroll-edge)::before,
+  :where(.glass-scroll-edge)::after,
+  :where(.glass-scroll-edge) > :where(.glass-scroll-edge-layer) {
+    opacity: calc(1 + var(--_lg-tn, 0));
+  }
+
+  /* hard: explicit, or the iOS 27 default for a top edge that names no style (§4.4). */
+  :where(.glass-scroll-edge[data-style="hard"], :root[data-glass-preset="ios27"] .glass-scroll-edge:not([data-style], [data-edge="bottom"])) {
+    background: color-mix(in srgb, var(--_glass-edge-c) 80%, transparent);
+    backdrop-filter: blur(20px) saturate(1.4);
+    -webkit-backdrop-filter: blur(20px) saturate(1.4);
+    opacity: calc(1 + var(--_lg-tn, 0)); /* the band is the blurring layer here */
+  }
+  :where(.glass-scroll-edge[data-style="hard"], :root[data-glass-preset="ios27"] .glass-scroll-edge:not([data-style], [data-edge="bottom"]))::before,
+  :where(.glass-scroll-edge[data-style="hard"], :root[data-glass-preset="ios27"] .glass-scroll-edge:not([data-style], [data-edge="bottom"]))::after,
+  :where(.glass-scroll-edge[data-style="hard"], :root[data-glass-preset="ios27"] .glass-scroll-edge:not([data-style], [data-edge="bottom"])) > :where(.glass-scroll-edge-layer) {
+    display: none;
+  }
+
+  /* Dark-tone bar: a dim instead of the blur and page scrim (soft), a dark fill (hard). */
+  :where(.glass-scroll-edge:is([data-lgc-tone="dark"], [data-tone="dark"]:not([data-lgc-tone]))) {
+    background: linear-gradient(var(--_glass-edge-dir), rgb(0 0 0 / calc(.42 * (1 + var(--_lg-tn, 0)))), rgb(0 0 0 / calc(.16 * (1 + var(--_lg-tn, 0)))) 55%, transparent);
+  }
+  :where(.glass-scroll-edge:is([data-lgc-tone="dark"], [data-tone="dark"]:not([data-lgc-tone])):not([data-style="hard"]))::before,
+  :where(.glass-scroll-edge:is([data-lgc-tone="dark"], [data-tone="dark"]:not([data-lgc-tone])):not([data-style="hard"]))::after,
+  :where(.glass-scroll-edge:is([data-lgc-tone="dark"], [data-tone="dark"]:not([data-lgc-tone])):not([data-style="hard"])) > :where(.glass-scroll-edge-layer) {
+    display: none;
+  }
+  :where(.glass-scroll-edge:is([data-lgc-tone="dark"], [data-tone="dark"]:not([data-lgc-tone]))[data-style="hard"], :root[data-glass-preset="ios27"] .glass-scroll-edge:is([data-lgc-tone="dark"], [data-tone="dark"]:not([data-lgc-tone])):not([data-style], [data-edge="bottom"])) {
+    background: rgb(28 28 30 / .8);
+  }
+
+  /* Reduce Transparency / Increase Contrast: an opaque fade, no blur. */
+  :where(:root[data-glass-transparency="reduced"], :root[data-glass-contrast="more"]) :where(.glass-scroll-edge) {
+    background: linear-gradient(var(--_glass-edge-dir), var(--_glass-edge-c) 0 55%, transparent);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    opacity: 1;
+  }
+  :where(:root[data-glass-transparency="reduced"], :root[data-glass-contrast="more"]) :where(.glass-scroll-edge:is([data-lgc-tone="dark"], [data-tone="dark"]:not([data-lgc-tone]))) {
+    background: linear-gradient(var(--_glass-edge-dir), rgb(28 28 30) 0 55%, transparent);
+  }
+  :where(:root[data-glass-transparency="reduced"], :root[data-glass-contrast="more"]) :where(.glass-scroll-edge)::before,
+  :where(:root[data-glass-transparency="reduced"], :root[data-glass-contrast="more"]) :where(.glass-scroll-edge)::after,
+  :where(:root[data-glass-transparency="reduced"], :root[data-glass-contrast="more"]) :where(.glass-scroll-edge) > :where(.glass-scroll-edge-layer) {
+    display: none;
+  }
+  @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+    :where(.glass-scroll-edge) {
+      background: linear-gradient(var(--_glass-edge-dir), var(--_glass-edge-c) 0 55%, transparent);
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+      opacity: 1;
+    }
+    :where(.glass-scroll-edge:is([data-lgc-tone="dark"], [data-tone="dark"]:not([data-lgc-tone]))) {
+      background: linear-gradient(var(--_glass-edge-dir), rgb(28 28 30) 0 55%, transparent);
+    }
+    :where(.glass-scroll-edge)::before,
+    :where(.glass-scroll-edge)::after,
+    :where(.glass-scroll-edge) > :where(.glass-scroll-edge-layer) {
+      display: none;
+    }
+  }
+
+  @media (forced-colors: active), print {
+    :where(.glass-scroll-edge) { display: none; }
+  }
+}
+
+/* ── 28-lens.css */
+/* <glass-lens> (§4.7.10). The host is registered glass: the core draws its backdrop layer (the
+   lens's own filter in Tier A), highlights, shadow and focus ring. In Tier W the lens adds a WebGL
+   canvas, painted between the core's ::before and ::after, which share its z-index of −1. */
+@layer liquid-glass {
+  :where(glass-lens) {
+    display: block;
+    box-sizing: border-box;
+    width: var(--glass-lens-size, 140px);
+    height: var(--glass-lens-size, 140px);
+    touch-action: none;
+    cursor: grab;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  :where(glass-lens[data-lgc-dragging]) { cursor: grabbing; }
+
+  /* Before the script runs: a plain frosted disc, so the lens is never blank. */
+  :where(glass-lens:not(.glass)) {
+    border-radius: 9999px;
+    background: rgb(255 255 255 / .14);
+    box-shadow: 0 16px 48px rgb(0 0 0 / .14), 0 1px 3px rgb(0 0 0 / .08);
+    backdrop-filter: blur(12px) saturate(1.6) brightness(1.05);
+    -webkit-backdrop-filter: blur(12px) saturate(1.6) brightness(1.05);
+  }
+
+  :where(.glass-lens-canvas) {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    display: block;
+    width: 100%;
+    height: 100%;
+    border-radius: inherit;
+    pointer-events: none;
+  }
+
+  /* Tier C (Reduce Transparency, Increase Contrast, forced colours) cannot magnify, and the core's
+     solid disc would only hide what the lens sits over: it becomes an empty loupe ring instead. */
+  :where(glass-lens.glass[data-lg-tier="c"]) {
+    background: none;
+    /* A dark ring between two light ones reads over any backdrop, light or dark. */
+    box-shadow: 0 0 0 1px rgb(255 255 255 / .8), inset 0 0 0 3px rgb(255 255 255 / .8);
+  }
+  :where(glass-lens.glass[data-lg-tier="c"]:not(:focus-visible)) {
+    outline: 2px solid rgb(0 0 0 / .6);
+    outline-offset: -2px;
+  }
+  :where(glass-lens.glass[data-lg-tier="c"])::before,
+  :where(glass-lens.glass[data-lg-tier="c"])::after { display: none; }
+
+  /* The canvas steps aside at once in the accessibility renderings, before the script catches up
+     with a changed preference. */
+  @media (forced-colors: active), (prefers-reduced-transparency: reduce), (prefers-contrast: more), print {
+    :where(.glass-lens-canvas) { display: none; }
+  }
+  :where(:root[data-glass-transparency="reduced"], :root[data-glass-contrast="more"]) :where(.glass-lens-canvas) {
+    display: none;
+  }
+}
+
+/* ── 29-container.css */
+/* .glass-container: droplet merge (§4.7.11), experimental. In Tier A the container draws one union
+   glass for its members: ::before is the backdrop (refraction, fill, touch glow) clipped to the
+   union's outline, ::after the highlights and the baked shadow. Both sit at z-index −1 under the
+   members, whose own layers are latent meanwhile; the script supplies the outline and one sprite
+   ([displacement map | overlay]). The container is positioned (the union lives in its padding
+   box) and isolated (a stacking context, not a Backdrop Root). */
+@layer liquid-glass {
+  :where(.glass-container) {
+    position: relative;
+    isolation: isolate;
+    /* The union's fill α from the core's tokens; the per-element fill opacity is read here, on the
+       container, because it does not inherit into the pseudo-elements. */
+    --_lgc-union-a: var(--glass-fill-opacity, var(--glass-opacity, .14));
+    --_lgc-union-ad: var(--glass-fill-opacity-dark, var(--glass-opacity-dark, .30));
+  }
+
+  :where(.glass-container[data-lgc-merge="union"])::before,
+  :where(.glass-container[data-lgc-merge="union"])::after {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    left: var(--_lgc-union-x);
+    top: var(--_lgc-union-y);
+    width: var(--_lgc-union-w);
+    height: var(--_lgc-union-h);
+    pointer-events: none;
+  }
+
+  :where(.glass-container[data-lgc-merge="union"])::before {
+    /* The core's fill, "Clear ↔ Tinted" preference included (§4.4). */
+    background:
+      var(--_lgc-union-glow, linear-gradient(transparent, transparent)),
+      rgb(255 255 255 / calc(var(--_lgc-union-a) * (1 + var(--_lg-tn, 0)) + (.85 - var(--_lgc-union-a)) * var(--_lg-tp, 0)));
+    clip-path: var(--_lgc-union-clip);
+    backdrop-filter: var(--_lgc-union-bf, none);
+  }
+  :where(.glass-container[data-lgc-merge="union"][data-lgc-merge-tone="dark"])::before {
+    background:
+      var(--_lgc-union-glow, linear-gradient(transparent, transparent)),
+      rgb(28 28 30 / calc(var(--_lgc-union-ad) * (1 + var(--_lg-tn, 0)) + (.85 - var(--_lgc-union-ad)) * var(--_lg-tp, 0)));
+  }
+
+  :where(.glass-container[data-lgc-merge="union"])::after {
+    background: var(--_lgc-union-sprite) var(--_lgc-union-overlay-x) 0 / var(--_lgc-union-size) no-repeat;
+  }
+
+  /* A ghost stands in for a member that just left; it is never a target. */
+  :where([data-lgc-ghost]) { pointer-events: none; }
+
+  /* The union is Tier A only: the script falls back to independent glass for these, and CSS steps
+     aside at once. */
+  @media (forced-colors: active), print {
+    :where(.glass-container[data-lgc-merge="union"])::before,
+    :where(.glass-container[data-lgc-merge="union"])::after { display: none; }
+  }
+}
+

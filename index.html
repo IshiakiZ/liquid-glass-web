@@ -1,0 +1,701 @@
+<!doctype html>
+<html lang="en" data-glass-url-overrides>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Liquid Glass for the Web</title>
+<meta name="description" content="Apple-style Liquid Glass for any website: live refraction, specular highlights and springy controls from one CSS file and one script.">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%2364d2ff'/%3E%3Cstop offset='.45' stop-color='%230a84ff'/%3E%3Cstop offset='.75' stop-color='%23bf5af2'/%3E%3Cstop offset='1' stop-color='%23ff375f'/%3E%3C/linearGradient%3E%3Ccircle cx='14' cy='14' r='13' fill='url(%23g)'/%3E%3Ccircle cx='14' cy='14' r='12.2' fill='none' stroke='%23fff' stroke-opacity='.55' stroke-width='1.6'/%3E%3Cpath d='M7 11.5a7.5 7.5 0 0 1 6.5-5.8' fill='none' stroke='%23fff' stroke-width='2.2' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="liquid-glass.css">
+<link rel="stylesheet" href="showcase/showcase.css">
+<script src="showcase/harness.js"></script>
+<script src="liquid-glass.js" defer></script>
+<script src="showcase/art.js" defer></script>
+<script src="showcase/showcase.js" defer></script>
+<script src="showcase/tuner.js" defer></script>
+</head>
+<body>
+<svg class="sc-sprite" aria-hidden="true" focusable="false">
+  <defs>
+    <linearGradient id="g-mark" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#64d2ff"/><stop offset=".45" stop-color="#0a84ff"/><stop offset=".75" stop-color="#bf5af2"/><stop offset="1" stop-color="#ff375f"/>
+    </linearGradient>
+    <symbol id="i-mark" viewBox="0 0 28 28"><circle cx="14" cy="14" r="12" fill="url(#g-mark)"/><circle cx="14" cy="14" r="11.25" fill="none" stroke="#fff" stroke-opacity=".55" stroke-width="1.5"/><path d="M7.5 11.5a7 7 0 0 1 6-5.3" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/><circle cx="18.5" cy="18.5" r="1.4" fill="#fff" fill-opacity=".8"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.2v13.6a.8.8 0 0 0 1.2.7l10.6-6.8a.8.8 0 0 0 0-1.4L9.2 4.5A.8.8 0 0 0 8 5.2z" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><rect x="6" y="4.5" width="4" height="15" rx="1.2" fill="currentColor" stroke="none"/><rect x="14" y="4.5" width="4" height="15" rx="1.2" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-back10" viewBox="0 0 24 24"><path d="M11.4 6.2v11.6a.7.7 0 0 1-1.1.6L2.7 12.6a.7.7 0 0 1 0-1.2l7.6-5.8a.7.7 0 0 1 1.1.6zM21 6.2v11.6a.7.7 0 0 1-1.1.6l-7.6-5.8a.7.7 0 0 1 0-1.2l7.6-5.8a.7.7 0 0 1 1.1.6z" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-fwd10" viewBox="0 0 24 24"><path d="M12.6 6.2v11.6a.7.7 0 0 0 1.1.6l7.6-5.8a.7.7 0 0 0 0-1.2l-7.6-5.8a.7.7 0 0 0-1.1.6zM3 6.2v11.6a.7.7 0 0 0 1.1.6l7.6-5.8a.7.7 0 0 0 0-1.2L4.1 5.6A.7.7 0 0 0 3 6.2z" fill="currentColor" stroke="none"/></symbol>
+    <symbol viewBox="0 0 24 24" id="i-heart"><path d="M12 20s-7.5-4.6-7.5-10.2A4.2 4.2 0 0 1 12 7.4a4.2 4.2 0 0 1 7.5 2.4C19.5 15.4 12 20 12 20z"/></symbol>
+    <symbol viewBox="0 0 24 24" id="i-airplay"><path d="M6.5 17H5a2 2 0 0 1-2-2V6.5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2V15a2 2 0 0 1-2 2h-1.5"/><path d="M12 14l4.5 5.5h-9z"/></symbol>
+    <symbol viewBox="0 0 24 24" id="i-share"><path d="M12 3.5v11M7.8 7.7 12 3.5l4.2 4.2"/><path d="M8 10.5H6.5A1.5 1.5 0 0 0 5 12v7a1.5 1.5 0 0 0 1.5 1.5h11A1.5 1.5 0 0 0 19 19v-7a1.5 1.5 0 0 0-1.5-1.5H16"/></symbol>
+    <symbol viewBox="0 0 24 24" id="i-more"><circle cx="5.5" cy="12" r="1.1"/><circle cx="12" cy="12" r="1.1"/><circle cx="18.5" cy="12" r="1.1"/></symbol>
+    <symbol viewBox="0 0 24 24" id="i-search"><circle cx="10.5" cy="10.5" r="6"/><path d="m15 15 5 5"/></symbol>
+    <symbol viewBox="0 0 24 24" id="i-tune"><path d="M4 7h8.5M17.5 7H20M4 17h2.5M11.5 17H20"/><circle cx="15" cy="7" r="2.5"/><circle cx="9" cy="17" r="2.5"/></symbol>
+    <symbol viewBox="0 0 24 24" id="i-list"><path d="M4 6.5h16M4 12h16M4 17.5h16"/></symbol>
+    <symbol viewBox="0 0 24 24" id="i-home"><path d="M3.5 11 12 4l8.5 7"/><path d="M6 9.5V20h4.5v-5.5h3V20H18V9.5"/></symbol>
+    <symbol viewBox="0 0 24 24" id="i-browse"><rect x="4" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5"/></symbol>
+    <symbol viewBox="0 0 24 24" id="i-radio"><circle cx="12" cy="12" r="2"/><path d="M8.2 15.8a5.4 5.4 0 0 1 0-7.6M15.8 8.2a5.4 5.4 0 0 1 0 7.6M5.4 18.6a9.3 9.3 0 0 1 0-13.2M18.6 5.4a9.3 9.3 0 0 1 0 13.2"/></symbol>
+    <symbol viewBox="0 0 24 24" id="i-library"><path d="M5 4v16M9 4v16"/><path d="m13 5 3.5-.8 3.5 15.6-3.5.8z"/></symbol>
+    <symbol viewBox="0 0 24 24" id="i-chevron-left"><path d="M14.5 5 7.5 12l7 7"/></symbol>
+    <symbol viewBox="0 0 24 24" id="i-chevron-down"><path d="m7 10 5 5 5-5"/></symbol>
+    <symbol viewBox="0 0 24 24" id="i-close"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></symbol>
+    <symbol viewBox="0 0 24 24" id="i-copy"><rect x="8" y="8" width="11.5" height="11.5" rx="2.2"/><path d="M5 15.5V6.5A2 2 0 0 1 7 4.5h8.5"/></symbol>
+    <symbol viewBox="0 0 24 24" id="i-check"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
+    <symbol viewBox="0 0 24 24" id="i-sun"><circle cx="12" cy="12" r="3.5"/><path d="M12 3.5V5M12 19v1.5M3.5 12H5M19 12h1.5M6 6l1 1M17 17l1 1M6 18l1-1M17 7l1-1"/></symbol>
+    <symbol viewBox="0 0 24 24" id="i-speaker"><path d="M4 9.5h3l4-3.5v12l-4-3.5H4z"/></symbol>
+    <symbol viewBox="0 0 24 24" id="i-speaker-wave"><path d="M4 9.5h3l4-3.5v12l-4-3.5H4zM15 9a4 4 0 0 1 0 6M17.5 6.5a7.5 7.5 0 0 1 0 11"/></symbol>
+    <symbol viewBox="0 0 24 24" id="i-edit"><path d="M4.5 19.5h4L19 9l-4-4L4.5 15.5z"/></symbol>
+    <symbol viewBox="0 0 24 24" id="i-trash"><path d="M5 7h14M9.5 7V4.5h5V7M7 7l1 12.5h8L17 7"/></symbol>
+    <symbol viewBox="0 0 24 24" id="i-mic"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></symbol>
+    <symbol viewBox="0 0 24 24" id="i-info"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5M12 7.8v.2"/></symbol>
+    <symbol viewBox="0 0 24 24" id="i-download"><path d="M12 4v11M7.5 10.5 12 15l4.5-4.5M5 19.5h14"/></symbol>
+    <symbol viewBox="0 0 24 24" id="i-plus"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol viewBox="0 0 24 24" id="i-wifi"><path d="M4.5 9.5a10.6 10.6 0 0 1 15 0M7.4 12.6a6.4 6.4 0 0 1 9.2 0M10.2 15.6a2.4 2.4 0 0 1 3.6 0"/></symbol>
+    <symbol viewBox="0 0 24 24" id="i-moon"><path d="M19.5 14.5A7.5 7.5 0 0 1 9.5 4.5a7.5 7.5 0 1 0 10 10z"/></symbol>
+    <symbol viewBox="0 0 24 24" id="i-drop"><path d="M12 3.5c3.4 4.1 6 7.5 6 10.5a6 6 0 0 1-12 0c0-3 2.6-6.4 6-10.5z"/></symbol>
+    <symbol viewBox="0 0 24 24" id="i-pointer"><path d="M6 3.5l12 7.2-5.4 1.3 3.2 6.2-2.4 1.3-3.2-6.3L6 17.3z"/></symbol>
+  </defs>
+</svg>
+
+<a class="sc-skip" href="#main">Skip to content</a>
+
+<!-- 0 · Fixed navigation: a floating capsule and a separate prominent action (no glass on glass). -->
+<div class="glass-scroll-edge" data-edge="top" data-style="soft" data-glass-bar="nav"></div>
+<header class="glass-toolbar sc-nav" data-glass-placement="top">
+  <nav class="glass glass-bar sc-navbar" id="nav" aria-label="Primary" data-glass-priority="10">
+    <a class="sc-wordmark" href="#top" aria-label="Liquid Glass for the Web, top of page">
+      <svg class="sc-mark" aria-hidden="true"><use href="#i-mark"/></svg>
+      <span>Liquid Glass <span class="sc-wordmark-sub">for the Web</span></span>
+    </a>
+    <ul class="sc-navlinks">
+      <li><a class="glass-item" href="#live">Live</a></li>
+      <li><a class="glass-item" href="#optics">Optics</a></li>
+      <li><a class="glass-item" href="#materials">Materials</a></li>
+      <li><a class="glass-item" href="#controls">Controls</a></li>
+      <li><a class="glass-item" href="#navigation">Navigation</a></li>
+    </ul>
+    <button class="glass-item sc-tune-open" type="button" aria-label="Open the tuning panel" aria-haspopup="dialog" aria-controls="tuner"><svg class="i" aria-hidden="true"><use href="#i-tune"/></svg></button>
+    <button class="glass-item sc-navmenu-open" type="button" popovertarget="navmenu" aria-label="Sections"><svg class="i" aria-hidden="true"><use href="#i-list"/></svg></button>
+  </nav>
+  <a class="glass glass-button glass-prominent sc-nav-cta" href="#start" data-glass-interactive data-glass-priority="9">Get the code</a>
+</header>
+<div id="navmenu" popover class="glass glass-menu" role="menu" aria-label="Sections">
+  <a role="menuitem" href="#live">Over anything</a>
+  <a role="menuitem" href="#optics">Lensing, not blur</a>
+  <a role="menuitem" href="#materials">Materials</a>
+  <a role="menuitem" href="#controls">Controls</a>
+  <a role="menuitem" href="#navigation">Navigation</a>
+  <a role="menuitem" href="#magnifier">Magnifier</a>
+  <a role="menuitem" href="#access">Accessibility</a>
+  <hr>
+  <a role="menuitem" href="#start">Get the code<svg class="i" aria-hidden="true"><use href="#i-download"/></svg></a>
+</div>
+
+<main id="main">
+
+<!-- 1 · Hero -->
+<section class="sc-hero" id="top" aria-labelledby="hero-title">
+  <canvas class="sc-art sc-hero-art" data-art="aurora" data-seed="3" data-theme="dark" aria-hidden="true"></canvas>
+  <div class="sc-wrap sc-hero-grid">
+    <div class="sc-hero-copy">
+      <h1 id="hero-title">Glass that bends&nbsp;light.</h1>
+      <p class="sc-hero-sub">Apple-style Liquid Glass for any website. Real refraction, specular highlights and springy controls from one CSS file and one script. No framework, no build step.</p>
+      <div class="sc-ctas">
+        <a class="glass glass-button glass-prominent" data-glass-size="large" href="#start" data-glass-interactive data-glass-priority="6">Get started</a>
+        <button class="glass glass-button sc-tune-open" data-glass-size="large" type="button" data-glass-interactive data-glass-priority="5" aria-haspopup="dialog" aria-controls="tuner">Tune it live</button>
+      </div>
+      <p class="glass sc-engine" id="engine" data-glass-priority="2">
+        <span class="sc-engine-dot" aria-hidden="true"></span>
+        <span class="sc-engine-text">Frosted glass</span>
+        <button class="sc-why" type="button" popovertarget="why">Why?</button>
+      </p>
+    </div>
+
+    <div class="sc-cluster">
+      <article class="glass sc-player" data-glass="clear" data-glass-dim="local" data-glass-priority="6" aria-label="Now playing">
+        <div class="sc-player-top">
+          <canvas class="sc-cover" data-art="mosaic" data-columns="1" data-seed="7" data-theme="dark" aria-hidden="true"></canvas>
+          <div class="sc-player-meta">
+            <strong>Aurora Drift</strong>
+            <span>Glasswork · Lumen</span>
+          </div>
+        </div>
+        <div class="glass-slider sc-player-scrub"><input type="range" min="0" max="221" value="84" aria-label="Playback position" aria-valuetext="1:24 of 3:41"></div>
+        <div class="sc-player-times" aria-hidden="true"><span id="tElapsed">1:24</span><span id="tLeft">−2:17</span></div>
+        <div class="sc-transport">
+          <button type="button" aria-label="Previous track"><svg aria-hidden="true"><use href="#i-back10"/></svg></button>
+          <button type="button" class="sc-playpause" aria-label="Pause" aria-pressed="true"><svg aria-hidden="true"><use href="#i-pause"/></svg></button>
+          <button type="button" aria-label="Next track"><svg aria-hidden="true"><use href="#i-fwd10"/></svg></button>
+        </div>
+        <label class="glass-switch sc-player-switch"><input type="checkbox" role="switch" switch checked> Lossless</label>
+      </article>
+      <div class="sc-cluster-row">
+        <button class="glass glass-button glass-icon" data-glass-size="large" type="button" data-glass-interactive data-glass-priority="4" aria-label="Love" aria-pressed="false"><svg class="i" aria-hidden="true"><use href="#i-heart"/></svg></button>
+        <button class="glass glass-button glass-icon" data-glass-size="large" type="button" data-glass-interactive data-glass-priority="4" aria-label="AirPlay"><svg class="i" aria-hidden="true"><use href="#i-airplay"/></svg></button>
+        <button class="glass glass-button glass-icon" data-glass-size="large" type="button" data-glass-interactive data-glass-priority="4" aria-label="Share"><svg class="i" aria-hidden="true"><use href="#i-share"/></svg></button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div id="why" popover class="glass glass-menu sc-why-pop" aria-labelledby="why-title">
+  <h2 id="why-title">Why does it depend on the browser?</h2>
+  <p>The bend is an SVG displacement filter inside <code>backdrop-filter</code>. Chrome, Edge and other Chromium browsers (version&nbsp;120 or later) render it over the live page.</p>
+  <p>Safari and Firefox don’t run SVG filters in <code>backdrop-filter</code> yet, and browsers on iPhone and iPad are built on Safari’s engine. They get the frosted tier: live blur, highlights, shadow and motion, without the bend.</p>
+  <p class="sc-why-foot">Neither is a screenshot. The glass always shows the live page behind it.</p>
+</div>
+
+<!-- 2 · Over anything: live DOM under glass -->
+<section class="sc-section" id="live" aria-labelledby="live-title">
+  <div class="sc-wrap">
+    <header class="sc-head">
+      <p class="sc-eyebrow">Live refraction</p>
+      <h2 id="live-title">Over anything.</h2>
+      <p class="sc-lead">Glass bends whatever the browser paints beneath it: moving text, CSS animation, a ticking clock, the words you type. Nothing here is a snapshot, and nothing has to hold still.</p>
+    </header>
+
+    <div class="sc-live">
+      <figure class="sc-tile sc-tile-marquee" data-glass-backdrop="dark">
+        <div class="sc-tile-bg sc-marquee" aria-hidden="true">
+          <div class="sc-marquee-row"><span>Live DOM · Not a screenshot · Refracted every frame · </span><span>Live DOM · Not a screenshot · Refracted every frame · </span></div>
+          <div class="sc-marquee-row sc-marquee-rev"><span>Text · Gradients · Hairlines · Emoji-free since 2026 · </span><span>Text · Gradients · Hairlines · Emoji-free since 2026 · </span></div>
+          <div class="sc-marquee-row"><span>Scroll it · Type it · Animate it · </span><span>Scroll it · Type it · Animate it · </span></div>
+        </div>
+        <div class="glass sc-live-capsule" data-glass="clear" data-glass-dim="none" aria-hidden="true" data-glass-priority="8"></div>
+        <figcaption>Marquee</figcaption>
+      </figure>
+
+      <figure class="sc-tile sc-tile-shapes" data-glass-backdrop="light">
+        <div class="sc-tile-bg sc-shapes" aria-hidden="true">
+          <span class="sc-shape sc-ring"></span>
+          <span class="sc-shape sc-bar sc-bar-1"></span>
+          <span class="sc-shape sc-bar sc-bar-2"></span>
+          <span class="sc-shape sc-bar sc-bar-3"></span>
+          <span class="sc-shape sc-dot sc-dot-1"></span>
+          <span class="sc-shape sc-dot sc-dot-2"></span>
+          <span class="sc-shape sc-dot sc-dot-3"></span>
+          <span class="sc-shape sc-square"></span>
+        </div>
+        <div class="glass sc-live-orb" data-glass="clear" data-glass-dim="none" aria-hidden="true" data-glass-priority="8"></div>
+        <figcaption>CSS animation</figcaption>
+      </figure>
+
+      <figure class="sc-tile sc-tile-clock" data-glass-backdrop="dark">
+        <div class="sc-tile-bg sc-clock">
+          <time class="sc-clock-time" id="clock" datetime="09:41:07"><span class="sc-clock-hm">09:41</span><span class="sc-clock-s">:07</span></time>
+          <span class="sc-clock-date" id="clockDate">Wednesday, 23 September</span>
+          <span class="sc-clock-sweep" aria-hidden="true"></span>
+        </div>
+        <div class="glass sc-live-pill" data-glass="clear" data-glass-dim="none" aria-hidden="true" data-glass-priority="8"></div>
+        <figcaption>Live clock</figcaption>
+      </figure>
+
+      <figure class="sc-tile sc-tile-type" data-glass-backdrop="light">
+        <div class="sc-tile-bg sc-type">
+          <label class="glass-sr-only" for="typeHere">Type here. The magnifier refracts the text as it appears.</label>
+          <textarea id="typeHere" spellcheck="false" autocomplete="off">Type here. Every letter bends as it lands under the glass.</textarea>
+        </div>
+        <glass-lens id="typeLens" size="150" zoom="1.45" dispersion="0.6" data-glass-priority="8" tabindex="0" aria-label="Magnifier over your text. It follows what you type; drag it, or use the arrow keys."></glass-lens>
+        <figcaption>Your text</figcaption>
+      </figure>
+    </div>
+
+    <p class="sc-note sc-live-note">
+      <span class="sc-chip"><span class="sc-engine-dot" aria-hidden="true"></span><span class="sc-engine-text">Frosted glass</span></span>
+      <span class="sc-engine-note" data-mode="a" hidden>Yes, live: the displacement runs on the GPU every frame, so the glass follows every change beneath it. The bar at the top does the same to this page as you scroll.</span>
+      <span class="sc-engine-note" data-mode="b">This browser shows the frosted tier: live and blurred, without the bend. Chrome or Edge on a computer or an Android phone shows the refraction.</span>
+      <span class="sc-engine-note" data-mode="b-off" hidden>Refraction is switched off, so the glass shows the frosted tier: live and blurred, without the bend.</span>
+      <span class="sc-engine-note" data-mode="c" hidden>Your accessibility settings ask for solid surfaces, so the glass is opaque here.</span>
+    </p>
+  </div>
+</section>
+
+<!-- 3 · Lensing, not blur -->
+<section class="sc-section sc-alt" id="optics" aria-labelledby="optics-title">
+  <div class="sc-wrap sc-split">
+    <div class="sc-split-copy">
+      <header class="sc-head sc-head-left">
+        <p class="sc-eyebrow">Optics</p>
+        <h2 id="optics-title">Lensing, not blur.</h2>
+        <p class="sc-lead">Thick glass bends light hardest at its edge. The rim pulls in what lies just beyond the border and compresses it into a bright band, while the centre stays calm. Drag the glass across the page and watch the edges.</p>
+      </header>
+      <dl class="sc-facts">
+        <div><dt>Bezel</dt><dd>A quarter of the short side, <span class="sc-nowrap">6–24&nbsp;px</span></dd></div>
+        <div><dt>Reach</dt><dd>Reaches <span class="sc-nowrap">0.7 × the bezel</span> past its edge</dd></div>
+        <div><dt>Corners</dt><dd>Seam-free for any <code>border-radius</code></dd></div>
+      </dl>
+      <div class="sc-toggles" role="group" aria-label="Optics demo settings">
+        <label class="glass-switch"><input type="checkbox" role="switch" switch checked id="optRefraction"> Refraction</label>
+        <div class="sc-toggle-row">
+          <span id="optOpticsLabel">Sampling</span>
+          <div class="glass glass-segmented sc-seg-small" role="radiogroup" aria-labelledby="optOpticsLabel" data-glass-priority="1">
+            <label><input type="radio" name="optOptics" value="rim" checked><span>Rim</span></label>
+            <label><input type="radio" name="optOptics" value="lens"><span>Lens</span></label>
+          </div>
+        </div>
+        <label class="glass-switch"><input type="checkbox" role="switch" switch id="optMap"> Show displacement maps</label>
+        <label class="glass-switch"><input type="checkbox" role="switch" switch id="optBezel"> Show bezel</label>
+      </div>
+    </div>
+    <div class="sc-stage sc-stage-optics" id="opticsStage">
+      <canvas class="sc-art" data-art="typeSpecimen" data-seed="14" aria-hidden="true"></canvas>
+      <div class="glass sc-drag sc-optics-capsule" data-glass="clear" data-glass-dim="none" data-glass-interactive data-glass-priority="7" tabindex="0" role="group" aria-roledescription="draggable glass" aria-label="Glass capsule. Drag it, or move it with the arrow keys."></div>
+      <div class="glass sc-drag sc-optics-card" data-glass="clear" data-glass-dim="none" data-glass-interactive data-glass-priority="7" tabindex="0" role="group" aria-roledescription="draggable glass" aria-label="Glass card. Drag it, or move it with the arrow keys."></div>
+    </div>
+  </div>
+</section>
+
+<!-- 4 · Materials -->
+<section class="sc-section" id="materials" aria-labelledby="materials-title">
+  <div class="sc-wrap">
+    <header class="sc-head">
+      <p class="sc-eyebrow">Materials</p>
+      <h2 id="materials-title">Regular. Clear. Tinted.</h2>
+      <p class="sc-lead">One set of optics, three recipes. Regular frosts and adapts its tone. Clear keeps the view and dims it just enough to read. Tinted carries colour, for the one action that matters most.</p>
+    </header>
+    <div class="sc-stage sc-stage-materials">
+      <canvas class="sc-art" data-art="landscape" data-seed="4" aria-hidden="true"></canvas>
+      <div class="sc-materials">
+        <div class="sc-material">
+          <article class="glass sc-sample" data-glass-priority="4" aria-labelledby="mat-regular">
+            <span class="sc-sample-tag">Sample</span>
+            <h3 id="mat-regular">Regular</h3>
+            <p>Frosted and saturated. Flips light or dark with what’s behind it.</p>
+          </article>
+          <button class="glass glass-button" type="button" data-glass-interactive data-glass-priority="3">Regular</button>
+        </div>
+        <div class="sc-material">
+          <article class="glass sc-sample" data-glass="clear" data-glass-dim="local" data-glass-priority="4" aria-labelledby="mat-clear">
+            <span class="sc-sample-tag">Sample</span>
+            <h3 id="mat-clear">Clear</h3>
+            <p>Barely blurred. A 35% dim keeps labels legible over bright media.</p>
+          </article>
+          <button class="glass glass-button" type="button" data-glass="clear" data-glass-interactive data-glass-priority="3">Clear</button>
+        </div>
+        <div class="sc-material">
+          <article class="glass sc-sample" data-glass-tint="#5e5ce6" data-glass-priority="4" aria-labelledby="mat-tinted">
+            <span class="sc-sample-tag">Sample</span>
+            <h3 id="mat-tinted">Tinted</h3>
+            <p>Colour with a contrast-safe label. One per bar, for the primary action.</p>
+          </article>
+          <button class="glass glass-button" type="button" data-glass-tint="#5e5ce6" data-glass-interactive data-glass-priority="3">Tinted</button>
+        </div>
+      </div>
+    </div>
+    <p class="sc-note sc-center">Samples only. Like Apple, keep glass on the navigation and control layer, not on your content.</p>
+  </div>
+</section>
+
+<!-- 5 · Controls -->
+<section class="sc-section sc-alt" id="controls" aria-labelledby="controls-title">
+  <div class="sc-wrap">
+    <header class="sc-head">
+      <p class="sc-eyebrow">Controls</p>
+      <h2 id="controls-title">Touch it and it lifts.</h2>
+      <p class="sc-lead">Press a thumb and it becomes a lens that magnifies what it covers, stretches with your speed and settles on a spring. Underneath, every control is a native input, so keyboards and screen readers just work.</p>
+    </header>
+    <div class="sc-stage sc-stage-controls" data-scheme="dark">
+      <canvas class="sc-art" data-art="mosaic" data-seed="21" data-theme="dark" aria-hidden="true"></canvas>
+      <div class="sc-controls">
+        <div class="glass sc-settings" data-glass-priority="-1" role="group" aria-label="Connections">
+          <label class="glass-switch"><input type="checkbox" role="switch" switch checked> <span class="sc-row-label"><svg class="i" aria-hidden="true"><use href="#i-wifi"/></svg>Wi-Fi</span></label>
+          <label class="glass-switch"><input type="checkbox" role="switch" switch> <span class="sc-row-label"><svg class="i" aria-hidden="true"><use href="#i-moon"/></svg>Do Not Disturb</span></label>
+          <label class="glass-switch"><input type="checkbox" role="switch" switch disabled> <span class="sc-row-label"><svg class="i" aria-hidden="true"><use href="#i-airplay"/></svg>Screen Mirroring</span></label>
+        </div>
+
+        <div class="sc-controls-col">
+          <div class="glass glass-segmented" role="radiogroup" aria-label="Range" data-glass-priority="3">
+            <label><input type="radio" name="ctlRange" value="d"><span>Day</span></label>
+            <label><input type="radio" name="ctlRange" value="w" checked><span>Week</span></label>
+            <label><input type="radio" name="ctlRange" value="m"><span>Month</span></label>
+            <label><input type="radio" name="ctlRange" value="y"><span>Year</span></label>
+          </div>
+          <div class="sc-slider-row">
+            <svg class="i" aria-hidden="true"><use href="#i-speaker"/></svg>
+            <div class="glass-slider"><input type="range" min="0" max="100" value="62" aria-label="Volume"></div>
+            <svg class="i" aria-hidden="true"><use href="#i-speaker-wave"/></svg>
+          </div>
+          <div class="sc-slider-row">
+            <svg class="i" aria-hidden="true"><use href="#i-sun"/></svg>
+            <div class="glass-slider"><input type="range" min="0" max="10" step="1" value="4" aria-label="Text size"></div>
+            <svg class="i sc-i-lg" aria-hidden="true"><use href="#i-sun"/></svg>
+          </div>
+        </div>
+
+        <div class="sc-controls-col">
+          <search class="glass glass-search" data-glass-priority="3">
+            <svg class="glass-search-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M10.5 4a6.5 6.5 0 1 1 0 13a6.5 6.5 0 0 1 0-13zM15.3 15.3 20 20" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"/></svg>
+            <input type="search" placeholder="Search" aria-label="Search albums">
+          </search>
+          <div class="sc-button-row">
+            <button class="glass glass-button glass-prominent" type="button" data-glass-interactive data-glass-priority="2">Subscribe</button>
+            <button class="glass glass-button" type="button" data-glass-interactive data-glass-priority="1">Share</button>
+          </div>
+          <div class="sc-button-row">
+            <button class="glass glass-button glass-icon" type="button" data-glass-interactive data-glass-priority="1" aria-label="Love" aria-pressed="false"><svg class="i" aria-hidden="true"><use href="#i-heart"/></svg></button>
+            <button class="glass glass-button glass-icon" type="button" data-glass-interactive data-glass-priority="1" aria-label="Add to library"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg></button>
+            <button class="glass glass-button" type="button" disabled data-glass-priority="0">Offline</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 6 · Navigation in a phone mock -->
+<section class="sc-section" id="navigation" aria-labelledby="navigation-title">
+  <div class="sc-wrap sc-split sc-split-phone">
+    <div class="sc-split-copy">
+      <header class="sc-head sc-head-left">
+        <p class="sc-eyebrow">Navigation</p>
+        <h2 id="navigation-title">Bars that float.</h2>
+        <p class="sc-lead">Toolbars in floating groups, a tab bar with a pill you can scrub, and sheets and menus that spring out of the button that opened them.</p>
+      </header>
+      <ul class="sc-steps">
+        <li><strong>Hold a tab</strong> and drag. The pill lifts into a lens and follows your finger.</li>
+        <li><strong>Scroll the feed.</strong> The tab bar tucks away, and comes back when you scroll up.<span class="sc-touch-note"> On a touch screen, tap the phone first.</span></li>
+        <li><strong>Tap <span class="sc-kbd"><span aria-hidden="true">•••</span><span class="glass-sr-only">More</span></span></strong> for a menu, or the list button for the Up Next sheet.</li>
+      </ul>
+    </div>
+    <div class="sc-phone" role="region" aria-label="Phone mock-up">
+      <div class="sc-phone-screen">
+        <div class="sc-feed" id="feed" tabindex="0" role="region" aria-label="Feed">
+          <div class="sc-feed-head">
+            <p class="sc-feed-kicker" id="feedKicker">Wednesday</p>
+            <h3 class="sc-feed-title" id="feedTitle">Listen Now</h3>
+          </div>
+          <canvas class="sc-art sc-feed-art" data-art="mosaic" data-seed="12" data-theme="dark" data-columns="2" aria-hidden="true"></canvas>
+        </div>
+        <div class="glass-scroll-edge sc-phone-edge" data-edge="top" data-style="soft"></div>
+        <div class="glass-toolbar sc-phone-top" data-glass-placement="top">
+          <div class="glass glass-group" data-glass-priority="2"><button class="glass-item" type="button" aria-label="Back"><svg class="i" aria-hidden="true"><use href="#i-chevron-left"/></svg></button></div>
+          <div class="glass glass-group" data-glass-priority="2">
+            <button class="glass-item" type="button" id="phoneQueue" aria-label="Up Next" aria-haspopup="dialog" aria-controls="phoneSheet"><svg class="i" aria-hidden="true"><use href="#i-list"/></svg></button>
+            <button class="glass-item" type="button" popovertarget="phoneMenu" aria-label="More"><svg class="i" aria-hidden="true"><use href="#i-more"/></svg></button>
+          </div>
+        </div>
+        <div class="glass-scroll-edge sc-phone-edge" data-edge="bottom" data-style="soft"></div>
+        <div class="glass-toolbar sc-phone-bottom" data-glass-placement="bottom">
+          <nav class="glass glass-tabbar" id="phoneTabs" aria-label="Library sections" data-glass-priority="3">
+            <button type="button" aria-current="true" data-title="Listen Now" data-seed="12"><svg class="i" aria-hidden="true"><use href="#i-home"/></svg><span>Home</span></button>
+            <button type="button" data-title="Browse" data-seed="13"><svg class="i" aria-hidden="true"><use href="#i-browse"/></svg><span>Browse</span></button>
+            <button type="button" data-title="Radio" data-seed="27"><svg class="i" aria-hidden="true"><use href="#i-radio"/></svg><span>Radio</span></button>
+            <button type="button" data-title="Library" data-seed="5"><svg class="i" aria-hidden="true"><use href="#i-library"/></svg><span>Library</span></button>
+          </nav>
+          <button class="glass glass-button glass-icon glass-tabbar-accessory" type="button" data-glass-interactive data-glass-priority="2" aria-label="Search"><svg class="i" aria-hidden="true"><use href="#i-search"/></svg></button>
+        </div>
+        <dialog class="glass glass-sheet sc-phone-sheet" id="phoneSheet" data-glass-layout="bottom" data-glass-detents="medium large" aria-labelledby="phoneSheetTitle" closedby="any">
+          <form method="dialog" class="sc-sheet-head">
+            <h3 id="phoneSheetTitle">Up Next</h3>
+            <button class="glass glass-button glass-icon" data-glass-interactive value="close" aria-label="Close"><svg class="i" aria-hidden="true"><use href="#i-close"/></svg></button>
+          </form>
+          <ul class="sc-rows">
+            <li><span>Aurora Drift</span><span>3:41</span></li>
+            <li><span>Low Tide</span><span>4:02</span></li>
+            <li><span>Lumen</span><span>2:58</span></li>
+            <li><span>Neon Rain</span><span>3:15</span></li>
+            <li><span>Glasswork</span><span>5:07</span></li>
+            <li><span>Meniscus</span><span>3:33</span></li>
+            <li><span>Caustics</span><span>4:20</span></li>
+          </ul>
+        </dialog>
+      </div>
+    </div>
+  </div>
+  <div id="phoneMenu" popover class="glass glass-menu" role="menu" aria-label="More actions" data-glass-placement="cover">
+    <button role="menuitem" type="button">Share Playlist<svg class="i" aria-hidden="true"><use href="#i-share"/></svg></button>
+    <button role="menuitem" type="button">Add to Library<svg class="i" aria-hidden="true"><use href="#i-plus"/></svg></button>
+    <button role="menuitem" type="button">Edit<svg class="i" aria-hidden="true"><use href="#i-edit"/></svg></button>
+    <hr>
+    <button role="menuitemcheckbox" type="button" aria-checked="true">Show Lyrics</button>
+    <button role="menuitem" type="button" class="glass-destructive">Remove<svg class="i" aria-hidden="true"><use href="#i-trash"/></svg></button>
+  </div>
+</section>
+
+<!-- 7 · Magnifier -->
+<section class="sc-section sc-alt" id="magnifier" aria-labelledby="magnifier-title">
+  <div class="sc-wrap">
+    <header class="sc-head">
+      <p class="sc-eyebrow">Magnifier</p>
+      <h2 id="magnifier-title">A lens you can hold.</h2>
+      <p class="sc-lead"><code>&lt;glass-lens&gt;</code> magnifies what’s under it with a real zoom field, a refracting rim and a trace of colour at the edge. Drag it, flick it, or move it with the arrow keys.</p>
+    </header>
+    <div class="sc-stage sc-stage-poster">
+      <canvas class="sc-art" id="poster" data-art="poster" data-seed="14" aria-label="Optical test poster" role="img"></canvas>
+      <glass-lens id="posterLens" size="180" zoom="1.6" dispersion="0.8" data-source="#poster" data-glass-priority="7" tabindex="0" aria-label="Magnifier. Drag it, or use the arrow keys."></glass-lens>
+      <glass-lens id="posterPill" zoom="1.3" dispersion="0.5" data-source="#poster" data-glass-priority="6" aria-hidden="true"></glass-lens>
+    </div>
+    <div class="sc-center sc-loupe-row">
+      <label class="glass-switch"><input type="checkbox" role="switch" switch id="loupeToggle"> Loupe: carry a lens across the whole page</label>
+      <p class="sc-note sc-loupe-note" id="loupeNote">Needs live refraction (Chromium).</p>
+    </div>
+  </div>
+</section>
+
+<!-- 8 · Droplets (experimental) -->
+<section class="sc-section" id="droplets" aria-labelledby="droplets-title">
+  <div class="sc-wrap">
+    <header class="sc-head">
+      <p class="sc-eyebrow"><span class="sc-badge">Experimental</span></p>
+      <h2 id="droplets-title">Glass that merges.</h2>
+      <p class="sc-lead">Shapes in a glass container fuse like droplets when they get close, then pull apart on a spring. Drag a button toward its neighbours, or collapse the toolbar.</p>
+    </header>
+    <div class="sc-stage sc-stage-droplets">
+      <canvas class="sc-art" data-art="aurora" data-seed="9" data-word="" aria-hidden="true"></canvas>
+      <div class="glass-container sc-drops" id="drops" data-glass-spacing="16">
+        <button class="glass glass-button glass-icon" data-glass-size="large" type="button" data-glass-interactive aria-label="Previous"><svg class="i" aria-hidden="true"><use href="#i-back10"/></svg></button>
+        <button class="glass glass-button glass-icon" data-glass-size="large" type="button" data-glass-interactive aria-label="Play"><svg class="i" aria-hidden="true"><use href="#i-play"/></svg></button>
+        <button class="glass glass-button glass-icon" data-glass-size="large" type="button" data-glass-interactive aria-label="Next"><svg class="i" aria-hidden="true"><use href="#i-fwd10"/></svg></button>
+      </div>
+      <div class="glass-container sc-drop-bar" id="dropBar" data-glass-spacing="16">
+        <button class="glass glass-button glass-icon" type="button" data-glass-interactive data-glass-id="more" aria-label="More"><svg class="i" aria-hidden="true"><use href="#i-more"/></svg></button>
+        <button class="glass glass-button glass-icon sc-extra" type="button" data-glass-interactive data-glass-id="edit" aria-label="Edit"><svg class="i" aria-hidden="true"><use href="#i-edit"/></svg></button>
+        <button class="glass glass-button glass-icon sc-extra" type="button" data-glass-interactive data-glass-id="share" aria-label="Share"><svg class="i" aria-hidden="true"><use href="#i-share"/></svg></button>
+        <button class="glass glass-button glass-icon sc-extra" type="button" data-glass-interactive data-glass-id="trash" aria-label="Delete"><svg class="i" aria-hidden="true"><use href="#i-trash"/></svg></button>
+      </div>
+      <button class="glass glass-button glass-prominent sc-drop-toggle" id="dropToggle" type="button" data-glass-interactive aria-controls="dropBar" aria-expanded="true">Collapse toolbar</button>
+    </div>
+    <p class="sc-note sc-center">Merging needs live refraction. Elsewhere the buttons stay separate capsules and morph with their matching ids.</p>
+  </div>
+</section>
+
+<!-- 9 · Accessibility -->
+<section class="sc-section sc-alt" id="access" aria-labelledby="access-title">
+  <div class="sc-wrap sc-split">
+    <div class="sc-split-copy">
+      <header class="sc-head sc-head-left">
+        <p class="sc-eyebrow">Accessibility</p>
+        <h2 id="access-title">Respects every setting.</h2>
+        <p class="sc-lead">Reduce Transparency, Increase Contrast and Reduce Motion each get the treatment Apple gives them. Not every browser reports Reduce Transparency to web pages, so the library also takes a manual switch. Try them on this page.</p>
+        <p class="sc-lead">Clear ↔ Tinted goes all the way to pure clear: no frost, no fill and no colour fringe, only the bend at the rim, the highlights and the shadow. Chromatic aberration is a separate setting, off by default: it adds a colour fringe to the refracting rim of every glass (Chromium), at any Clear ↔ Tinted setting, and leaves the centre clean.</p>
+      </header>
+      <div class="sc-toggles" role="group" aria-label="Accessibility overrides for this page">
+        <label class="glass-switch"><input type="checkbox" role="switch" switch data-pref="transparency" data-on="reduced"> Reduce transparency</label>
+        <label class="glass-switch"><input type="checkbox" role="switch" switch data-pref="contrast" data-on="more"> Increase contrast</label>
+        <label class="glass-switch"><input type="checkbox" role="switch" switch data-pref="motion" data-on="reduced"> Reduce motion</label>
+        <div class="sc-toggle-row sc-tinted-row">
+          <label for="prefTinted">Clear ↔ Tinted</label>
+          <div class="glass-slider"><input type="range" id="prefTinted" min="-1" max="1" step="0.05" value="0"></div>
+        </div>
+        <div class="sc-toggle-row sc-tinted-row">
+          <label for="prefDispersion">Chromatic aberration</label>
+          <div class="glass-slider"><input type="range" id="prefDispersion" min="0" max="1" step="0.05" value="0"></div>
+        </div>
+      </div>
+      <p class="sc-note" id="systemPrefs">Your system settings are applied automatically.</p>
+    </div>
+    <div class="sc-stage sc-stage-access">
+      <canvas class="sc-art" data-art="typeSpecimen" data-seed="5" aria-hidden="true"></canvas>
+      <div class="sc-access-demo">
+        <div class="glass glass-bar sc-access-bar" data-glass-priority="2">
+          <button class="glass-item" type="button" aria-label="Back"><svg class="i" aria-hidden="true"><use href="#i-chevron-left"/></svg></button>
+          <span class="sc-access-title">Library</span>
+          <button class="glass-item" type="button" aria-label="Share"><svg class="i" aria-hidden="true"><use href="#i-share"/></svg></button>
+          <button class="glass-item" type="button" aria-label="Love" aria-pressed="true"><svg class="i" aria-hidden="true"><use href="#i-heart"/></svg></button>
+        </div>
+        <div class="sc-access-row">
+          <button class="glass glass-button glass-prominent" type="button" data-glass-interactive data-glass-priority="2"><svg class="i" aria-hidden="true"><use href="#i-play"/></svg>Play</button>
+          <button class="glass glass-button" type="button" data-glass-interactive data-glass-priority="2">Shuffle</button>
+          <button class="glass glass-button glass-icon" type="button" data-glass-interactive data-glass-priority="2" aria-label="More"><svg class="i" aria-hidden="true"><use href="#i-more"/></svg></button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 10 · Get started -->
+<section class="sc-section" id="start" aria-labelledby="start-title">
+  <div class="sc-wrap sc-start">
+    <header class="sc-head">
+      <p class="sc-eyebrow">Get started</p>
+      <h2 id="start-title">Two files. One class.</h2>
+      <p class="sc-lead">Add the stylesheet and the script, then put <code>.glass</code> on anything. The CSS alone gives frosted glass in every modern browser; the script adds refraction, highlights that follow each shape, adaptive tone and the controls.</p>
+    </header>
+    <div class="sc-code">
+      <div class="sc-code-head">
+        <span>index.html</span>
+        <button class="glass glass-button sc-copy" data-glass-size="small" type="button" data-glass-interactive data-copy="snippet"><svg class="i" aria-hidden="true"><use href="#i-copy"/></svg><span>Copy</span></button>
+      </div>
+<pre id="snippet"><code><span class="t-c">&lt;!-- in &lt;head&gt; --&gt;</span>
+<span class="t-t">&lt;link</span> <span class="t-a">rel</span>=<span class="t-s">"stylesheet"</span> <span class="t-a">href</span>=<span class="t-s">"liquid-glass.css"</span><span class="t-t">&gt;</span>
+<span class="t-t">&lt;script</span> <span class="t-a">src</span>=<span class="t-s">"liquid-glass.js"</span> <span class="t-a">defer</span><span class="t-t">&gt;&lt;/script&gt;</span>
+
+<span class="t-c">&lt;!-- anywhere in &lt;body&gt; --&gt;</span>
+<span class="t-t">&lt;nav</span> <span class="t-a">class</span>=<span class="t-s">"glass glass-bar"</span><span class="t-t">&gt;</span>…<span class="t-t">&lt;/nav&gt;</span>
+<span class="t-t">&lt;button</span> <span class="t-a">class</span>=<span class="t-s">"glass glass-button glass-prominent"</span> <span class="t-a">data-glass-interactive</span><span class="t-t">&gt;</span>Buy<span class="t-t">&lt;/button&gt;</span>
+<span class="t-t">&lt;label</span> <span class="t-a">class</span>=<span class="t-s">"glass-switch"</span><span class="t-t">&gt;&lt;input</span> <span class="t-a">type</span>=<span class="t-s">"checkbox"</span> <span class="t-a">role</span>=<span class="t-s">"switch"</span><span class="t-t">&gt;</span> Wi‑Fi<span class="t-t">&lt;/label&gt;</span>
+<span class="t-t">&lt;glass-lens</span> <span class="t-a">size</span>=<span class="t-s">"140"</span> <span class="t-a">zoom</span>=<span class="t-s">"1.5"</span><span class="t-t">&gt;&lt;/glass-lens&gt;</span></code></pre>
+    </div>
+    <ul class="sc-points">
+      <li><strong>No dependencies</strong><span>Vanilla JS and CSS. No build step, no network requests.</span></li>
+      <li><strong>Native underneath</strong><span>Real buttons, checkboxes, ranges and dialogs keep their semantics.</span></li>
+      <li><strong>Degrades gracefully</strong><span>Refraction in Chromium, frosted glass elsewhere, solid when settings ask for it.</span></li>
+    </ul>
+    <div class="sc-downloads">
+      <a class="glass glass-button" href="liquid-glass.css" download data-glass-interactive><svg class="i" aria-hidden="true"><use href="#i-download"/></svg>liquid-glass.css</a>
+      <a class="glass glass-button" href="liquid-glass.js" download data-glass-interactive><svg class="i" aria-hidden="true"><use href="#i-download"/></svg>liquid-glass.js</a>
+    </div>
+    <p class="sc-note sc-center">Using ES modules? Keep <a href="liquid-glass.mjs" download><code>liquid-glass.mjs</code></a> next to <code>liquid-glass.js</code> and <code>import LiquidGlass from './liquid-glass.mjs'</code>.</p>
+  </div>
+</section>
+
+<!-- 11 · Under the hood -->
+<section class="sc-section sc-alt" id="hood" aria-labelledby="hood-title">
+  <div class="sc-wrap">
+    <header class="sc-head">
+      <p class="sc-eyebrow">Under the hood</p>
+      <h2 id="hood-title">What your browser is doing.</h2>
+      <p class="sc-lead">Live numbers from the library on this page: which tier each piece of glass renders, why, and what it costs.</p>
+    </header>
+    <div class="sc-stage sc-stage-hood" data-scheme="dark">
+      <canvas class="sc-art" data-art="mosaic" data-seed="33" data-theme="dark" aria-hidden="true"></canvas>
+      <div class="glass sc-diag" id="diag" data-glass-tier="b" role="region" aria-label="Diagnostics">
+        <div class="sc-diag-cols">
+          <dl class="sc-diag-list" id="diagEnv"></dl>
+          <dl class="sc-diag-list" id="diagCost"></dl>
+        </div>
+        <div class="sc-diag-table-head">
+          <h3>Glass on this page</h3>
+          <label class="glass-switch sc-diag-filter"><input type="checkbox" role="switch" switch checked id="diagInView"> In view</label>
+        </div>
+        <div class="sc-diag-table" tabindex="0" role="region" aria-label="Glass elements and their tiers">
+          <table>
+            <thead><tr><th scope="col">Element</th><th scope="col">Section</th><th scope="col">Tier</th><th scope="col">Reason</th></tr></thead>
+            <tbody id="diagRows"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="sc-footer" data-glass-backdrop="dark">
+  <canvas class="sc-art" data-art="landscape" data-seed="7" data-theme="dark" aria-hidden="true"></canvas>
+  <div class="sc-wrap sc-footer-inner">
+    <nav class="glass glass-bar sc-footer-bar" aria-label="Footer">
+      <a class="sc-wordmark" href="#top"><svg class="sc-mark" aria-hidden="true"><use href="#i-mark"/></svg><span>Liquid Glass <span class="sc-wordmark-sub">for the Web</span></span></a>
+      <button class="glass-item" type="button" popovertarget="license">MIT License</button>
+      <a class="glass-item" href="#start">Get the code</a>
+      <a class="glass-item" href="#top">Back to top</a>
+    </nav>
+    <p class="sc-disclaimer">An independent, Apple-inspired implementation. Not affiliated with Apple.</p>
+  </div>
+  <div id="license" popover class="glass glass-menu sc-why-pop sc-license" aria-labelledby="license-title">
+    <h2 id="license-title">MIT License</h2>
+    <p>Copyright (c) 2026 Liquid Glass for the Web contributors</p>
+    <p>Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:</p>
+    <p>The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.</p>
+    <p>THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.</p>
+  </div>
+</footer>
+
+<!-- Tuning panel: live controls for LiquidGlass.defaults and the CSS custom properties. -->
+<dialog class="glass glass-sheet sc-tuner" id="tuner" data-glass-detents="medium large" aria-labelledby="tunerTitle" closedby="closerequest">
+  <form method="dialog" class="sc-sheet-head">
+    <h2 id="tunerTitle">Tune</h2>
+    <button class="glass glass-button glass-icon" data-glass-interactive value="close" aria-label="Close tuning panel"><svg class="i" aria-hidden="true"><use href="#i-close"/></svg></button>
+  </form>
+  <p class="sc-tuner-intro">Changes apply to the page as you make them.</p>
+
+  <div class="sc-tune-group" role="group" aria-labelledby="tuScopeLabel">
+    <div class="sc-tune-row sc-tune-seg">
+      <span id="tuScopeLabel">Apply to</span>
+      <div class="glass glass-segmented" role="radiogroup" aria-labelledby="tuScopeLabel">
+        <label><input type="radio" name="tuScope" value="page" checked><span>Whole page</span></label>
+        <label><input type="radio" name="tuScope" value="element"><span>One element</span></label>
+      </div>
+    </div>
+    <div class="sc-tune-pick" id="tuPickRow" hidden>
+      <button class="glass glass-button" data-glass-size="small" type="button" id="tuPick" data-glass-interactive><svg class="i" aria-hidden="true"><use href="#i-pointer"/></svg>Pick glass</button>
+      <span id="tuPicked" aria-live="polite">Nothing picked yet.</span>
+    </div>
+  </div>
+
+  <fieldset class="sc-tune-group">
+    <legend>Look</legend>
+    <div class="sc-tune-row sc-tune-seg">
+      <span id="tuPresetLabel">Preset</span>
+      <div class="glass glass-segmented" role="radiogroup" aria-labelledby="tuPresetLabel">
+        <label><input type="radio" name="tuPreset" value="ios26" checked><span>iOS 26</span></label>
+        <label><input type="radio" name="tuPreset" value="ios27"><span>iOS 27</span></label>
+      </div>
+    </div>
+    <div class="sc-tune-row sc-tune-seg">
+      <span id="tuToneLabel">Tone</span>
+      <div class="glass glass-segmented" role="radiogroup" aria-labelledby="tuToneLabel">
+        <label><input type="radio" name="tuTone" value="auto" checked><span>Auto</span></label>
+        <label><input type="radio" name="tuTone" value="light"><span>Light</span></label>
+        <label><input type="radio" name="tuTone" value="dark"><span>Dark</span></label>
+      </div>
+    </div>
+    <div class="sc-tune-row sc-tune-seg">
+      <span id="tuTierLabel">Tier</span>
+      <div class="glass glass-segmented" role="radiogroup" aria-labelledby="tuTierLabel">
+        <label><input type="radio" name="tuTier" value="auto" checked><span>Auto</span></label>
+        <label><input type="radio" name="tuTier" value="b"><span>Frosted</span></label>
+        <label><input type="radio" name="tuTier" value="c"><span>Solid</span></label>
+      </div>
+    </div>
+  </fieldset>
+
+  <fieldset class="sc-tune-group">
+    <legend>Optics</legend>
+    <div class="sc-tune-row"><label for="tuRefraction">Refraction</label><output for="tuRefraction"></output><div class="glass-slider"><input type="range" id="tuRefraction" data-key="refraction" min="0" max="2" step="0.05"></div></div>
+    <div class="sc-tune-row"><label for="tuBezel">Bezel</label><output for="tuBezel"></output><div class="glass-slider"><input type="range" id="tuBezel" data-key="bezel" min="3" max="32" step="1"></div></div>
+    <div class="sc-tune-row sc-tune-seg">
+      <span id="tuOpticsLabel">Sampling</span>
+      <div class="glass glass-segmented" role="radiogroup" aria-labelledby="tuOpticsLabel">
+        <label><input type="radio" name="tuOptics" value="rim" checked><span>Rim</span></label>
+        <label><input type="radio" name="tuOptics" value="lens"><span>Lens</span></label>
+      </div>
+    </div>
+    <div class="sc-tune-row"><label for="tuProfile">Profile</label><output for="tuProfile"></output><div class="glass-slider"><input type="range" id="tuProfile" data-key="profile" min="2" max="5" step="0.1"></div></div>
+    <div class="sc-tune-row"><label for="tuDispersion">Chromatic aberration</label><output for="tuDispersion"></output><div class="glass-slider"><input type="range" id="tuDispersion" data-key="dispersion" min="0" max="1" step="0.05"></div></div>
+  </fieldset>
+
+  <fieldset class="sc-tune-group">
+    <legend>Surface</legend>
+    <div class="sc-tune-row"><label for="tuBlur">Blur</label><output for="tuBlur"></output><div class="glass-slider"><input type="range" id="tuBlur" data-key="blur" min="0" max="20" step="0.5"></div></div>
+    <div class="sc-tune-row"><label for="tuSaturation">Saturation</label><output for="tuSaturation"></output><div class="glass-slider"><input type="range" id="tuSaturation" data-key="saturation" min="1" max="2.2" step="0.05"></div></div>
+    <div class="sc-tune-row"><label for="tuOpacity">Fill</label><output for="tuOpacity"></output><div class="glass-slider"><input type="range" id="tuOpacity" data-key="opacity" min="0" max="0.6" step="0.01"></div></div>
+    <div class="sc-tune-row"><label for="tuHighlight">Highlight</label><output for="tuHighlight"></output><div class="glass-slider"><input type="range" id="tuHighlight" data-key="highlight" min="0" max="2" step="0.05"></div></div>
+    <div class="sc-tune-row"><label for="tuEdge">Dark edge</label><output for="tuEdge"></output><div class="glass-slider"><input type="range" id="tuEdge" data-key="edgeDark" min="0" max="0.3" step="0.01"></div></div>
+    <div class="sc-tune-row sc-tune-dial">
+      <span id="tuAngleLabel">Light angle</span><output id="tuAngleOut"></output>
+      <div class="sc-dial" id="tuAngle" role="slider" tabindex="0" aria-labelledby="tuAngleLabel" aria-valuemin="-180" aria-valuemax="180"><span class="sc-dial-hand" aria-hidden="true"></span></div>
+    </div>
+    <div class="sc-tune-row sc-tune-swatches">
+      <span id="tuTintLabel">Accent</span>
+      <div class="sc-swatches" role="radiogroup" aria-labelledby="tuTintLabel">
+        <label style="--c:#0a84ff"><input type="radio" name="tuTint" value="#0a84ff" checked><span class="glass-sr-only">Blue</span></label>
+        <label style="--c:#ff375f"><input type="radio" name="tuTint" value="#ff375f"><span class="glass-sr-only">Pink</span></label>
+        <label style="--c:#ff9f0a"><input type="radio" name="tuTint" value="#ff9f0a"><span class="glass-sr-only">Orange</span></label>
+        <label style="--c:#30d158"><input type="radio" name="tuTint" value="#30d158"><span class="glass-sr-only">Green</span></label>
+        <label style="--c:#bf5af2"><input type="radio" name="tuTint" value="#bf5af2"><span class="glass-sr-only">Purple</span></label>
+        <label class="sc-swatch-custom"><input type="color" id="tuTintCustom" value="#5e5ce6" aria-label="Custom accent colour"></label>
+      </div>
+    </div>
+  </fieldset>
+
+  <fieldset class="sc-tune-group">
+    <legend>Debug</legend>
+    <label class="glass-switch"><input type="checkbox" role="switch" switch data-debug="tiers"> Outline tiers</label>
+    <label class="glass-switch"><input type="checkbox" role="switch" switch data-debug="maps"> Displacement maps</label>
+    <label class="glass-switch"><input type="checkbox" role="switch" switch data-debug="bezel"> Bezel</label>
+    <label class="glass-switch"><input type="checkbox" role="switch" switch id="tuAnimate"> Animate backgrounds</label>
+  </fieldset>
+
+  <details class="sc-tune-css">
+    <summary>CSS for these settings</summary>
+    <pre id="tuCss"></pre>
+  </details>
+  <div class="sc-tune-actions">
+    <button class="glass glass-button" type="button" id="tuReset" data-glass-interactive>Reset</button>
+    <button class="glass glass-button glass-prominent" type="button" id="tuCopy" data-glass-interactive><svg class="i" aria-hidden="true"><use href="#i-copy"/></svg><span>Copy CSS</span></button>
+  </div>
+</dialog>
+</body>
+</html>

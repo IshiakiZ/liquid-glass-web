@@ -1,0 +1,4 @@
+# The library and the showcase are served and downloaded byte for byte: keep LF on every checkout.
+* text=auto eol=lf
+*.jpg binary
+*.png binary
