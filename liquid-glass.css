@@ -1,4 +1,4 @@
-/*! Liquid Glass for the Web v1.1.0 | MIT License | An independent, Apple-inspired implementation. Not affiliated with Apple. */
+/*! Liquid Glass for the Web v1.2.0 | MIT License | An independent, Apple-inspired implementation. Not affiliated with Apple. */
 
 /* ── 00-properties.css */
 /* Registered custom properties (§3.10). Registration makes them animatable (tone crossfade)
@@ -54,6 +54,18 @@
   :root[data-glass-preset="ios27"] {
     --glass-opacity: .24;
     --glass-opacity-dark: .38;
+  }
+
+  /* Thick glass shows what it bends: thin fills, a light dim under clear glass. Labels keep a
+     floor and their halo, but a low one: the bent backdrop is the point of this preset (a page
+     that needs more holds its own --glass-opacity-text). */
+  :root[data-glass-preset="thick"] {
+    --glass-opacity: .04;
+    --glass-opacity-dark: .20;
+    --glass-opacity-clear: 0;
+    --glass-opacity-text: .22;
+    --glass-opacity-text-dark: .34;
+    --glass-dim: rgb(0 0 0 / .14);
   }
 }
 
@@ -260,6 +272,27 @@
   :where(:root[data-glass-preset="ios27"] .glass[data-glass="clear"])::before {
     backdrop-filter: var(--_lg-bf, blur(var(--glass-blur, 4px)) saturate(var(--glass-saturation, 1.2)) brightness(var(--glass-brightness, 1)));
     -webkit-backdrop-filter: blur(4px) saturate(1.2) brightness(1);
+  }
+
+  /* ── Thick preset: thick glass (no-JS frost; JS writes exact values) ── */
+  /* A solid slab casts a tight, dark contact shadow that starts at its edge and is gone ~20 px
+     out, not a soft lift: 1 px down, 18 px blur, 1 px in (the busy-backdrop deepening and the
+     lift still add to it). */
+  :where(:root[data-glass-preset="thick"] .glass) {
+    --_lg-depth: 0 1px 18px -1px rgb(0 0 0 / calc((.46 + var(--_lg-so, .14) + .08 * var(--_lg-lift)) * var(--glass-shadow-strength, 1)));
+    --_lg-shadow: 0 1px 18px -1px rgb(0 0 0 / calc((.46 + var(--_lg-so, .14) + .08 * var(--_lg-lift)) * var(--glass-shadow-strength, 1) * var(--_lg-vis)));
+  }
+  :where(:root[data-glass-preset="thick"] .glass)::before {
+    backdrop-filter: var(--_lg-bf, blur(var(--glass-blur, 3px)) saturate(var(--glass-saturation, 1.1)) brightness(var(--glass-brightness, 1.04)));
+    -webkit-backdrop-filter: blur(3px) saturate(1.1) brightness(1.04);
+  }
+  :where(:root[data-glass-preset="thick"] .glass:is(.glass-prominent, [data-glass-tint], [data-lg-tinted]))::before {
+    backdrop-filter: var(--_lg-bf, blur(var(--glass-blur, 3px)) saturate(var(--glass-saturation, 1.8)) brightness(var(--glass-brightness, 1)));
+    -webkit-backdrop-filter: blur(3px) saturate(1.8) brightness(1);
+  }
+  :where(:root[data-glass-preset="thick"] .glass[data-glass="clear"])::before {
+    backdrop-filter: var(--_lg-bf, blur(var(--glass-blur, .5px)) saturate(var(--glass-saturation, 1)) brightness(var(--glass-brightness, 1.04)));
+    -webkit-backdrop-filter: blur(.5px) saturate(1) brightness(1.04);
   }
 
   /* ── States written by JS ─────────────────────────────────────────────── */

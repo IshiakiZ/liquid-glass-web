@@ -176,7 +176,7 @@
       for (const prop of ['--glass-opacity', '--glass-opacity-dark', '--glass-accent']) html.style.removeProperty(prop);
       html.removeAttribute('data-glass-tone');
       html.removeAttribute('data-glass-refraction');
-      LG.setPreferences({ preset: 'ios26', transparency: 'auto' });
+      LG.setPreferences({ preset: 'thick', transparency: 'auto' }); // this page's own default (<html>)
       window.Showcase.setDispersion(null, tuner);
       changes.page.clear();
       setRadio('tuTint', '#0a84ff');

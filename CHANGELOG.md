@@ -1,5 +1,52 @@
 # Changelog
 
+## 1.2.0 (2026-10-18)
+
+Thick glass.
+
+- **A new preset, `thick`.** `<html data-glass-preset="thick">` (or `LiquidGlass.setPreferences({ preset: 'thick' })`)
+  makes every glass a solid slab with a round edge instead of a thin sheet. What passes under it bends and magnifies
+  toward the rim, like looking through a glass rod; the rim brightens where the surface tilts away (Fresnel), a crisp
+  stroke runs just inside the top edge, and a tight contact shadow sits under it. The showcase now opens with it;
+  iOS 26 and iOS 27 are still in its Tune panel and are unchanged.
+- **A new optics mode, `bevel`.** `data-glass-optics="bevel"` on any glass. `data-glass-bezel` is then the radius of
+  the slab's round edge in px (40 under `thick`), and it is not capped by the element's size: a slab thinner than twice
+  that radius is all edge. `data-glass-refraction` scales the bend (0.69 under `thick`).
+- Under `thick` the frost and the bend are counted in screen pixels, so a 2x screen shows half the CSS-pixel blur and
+  bend at the same settings, and the glass looks the same on every screen.
+- Thin fills under `thick` (`--glass-opacity` .04, the text floor .22) so the bent backdrop shows; labels keep their
+  halo. A page that needs more sets its own tokens.
+- No colour split by default under `thick`: three displacements per glass made a lifted lens drag visibly less
+  smooth. `--glass-dispersion` turns it on.
+- The showcase's Tune panel has Thick and Bevel, and its Bezel slider reaches 64.
+
+The look follows [liquid-glass.ybouane.com](https://liquid-glass.ybouane.com/), a WebGL renderer that paints a
+snapshot of the page. Here it is the same live SVG refraction as before, so the glass follows scrolling and every
+change on the page; no code from that project is used.
+
+How the bend works: at depth d inside the edge the slab's surface stands √(d·(2R − d)) high, up to the edge radius R,
+and is flat beyond. The backdrop moves up the surface's slope, refracted at the entry and the exit face (index 1.5),
+plus a little toward the centre where the slab is full depth. That field is baked into the displacement map in the
+grey-tile encoding the magnifier uses (full 8-bit precision for each axis under magnification), with the slope of
+the outermost few pixels capped so the map's range stays useful. The result is smoothed by half a device pixel:
+feDisplacementMap samples the nearest pixel, which under steady magnification draws faint contour lines. The rim
+light comes from the same surface, drawn into the overlay image.
+
+Where it lives in the bundle:
+
+| File | Partial | Change |
+|---|---|---|
+| `liquid-glass.js` | `core-01-config.js` | `PRESETS.thick` |
+| `liquid-glass.js` | `core-03-geometry.js` | `bevelField()` |
+| `liquid-glass.js` | `core-04-maps.js` | `buildLensMaps` mode `bevel`; `buildOverlay` option `bevel` (rim light); `workerSource` carries `bevelField` |
+| `liquid-glass.js` | `core-05-resources.js` | `acquireLensMap` passes `mode` |
+| `liquid-glass.js` | `core-06-filters.js` | `pack()` shared by both encodings; `alt` can be a grey-tile pair (a lifted lens crossfading from a `bevel` map) |
+| `liquid-glass.js` | `core-09-glass.js` | optics `bevel`; `derive()` (edge radius, screen pixels), `mapOpts()`, `overlayOpts()`, `requestMap()`, `restSpec()` (grey-tile map, smoothing) |
+| `liquid-glass.css` | `01-tokens.css` | the preset's fills |
+| `liquid-glass.css` | `02-base.css` | the preset's contact shadow and frost without the script |
+| `index.html` | `<html>`, Tune panel | `data-glass-preset="thick"`; Thick and Bevel; Bezel up to 64 |
+| `showcase/tuner.js` | Reset | returns to Thick, the page's preset |
+
 ## 1.1.0 (2026-10-03)
 
 The pill resizes.

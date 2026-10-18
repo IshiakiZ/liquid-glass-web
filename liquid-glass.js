@@ -1,10 +1,10 @@
-/*! Liquid Glass for the Web v1.1.0 | MIT License | An independent, Apple-inspired implementation. Not affiliated with Apple. */
+/*! Liquid Glass for the Web v1.2.0 | MIT License | An independent, Apple-inspired implementation. Not affiliated with Apple. */
 (function (addons) {
 'use strict';
 // Already loaded (e.g. classic script + ES module, or the core and then the all-in-one): only
 // the groups the first copy lacks are added.
 if (globalThis.LiquidGlass?.version) { for (const [name, fn] of addons) globalThis.LiquidGlass.extend?.(name, fn); return; }
-const VERSION = '1.1.0';
+const VERSION = '1.2.0';
 // ── core-00-base.js ─────────────────────────────────────────────────────────
 // Namespaces. `I` is the internal API shared with component partials (see INTERNAL-API.md);
 // `LG` becomes globalThis.LiquidGlass. Nothing in the core touches the DOM at load time, so the
@@ -111,6 +111,22 @@ PRESETS.ios27 = {
   saturation: 1.5, brightness: 1.04,
   kReach: 0.60,
   line: 1.0, soft: 0.32, floor: 0.15, edgeDark: 0.10,
+};
+// Thick glass: the shape is a solid slab with a round edge (optics 'bevel', bezel = its depth in
+// px) that bends and magnifies what is behind it at both faces, brightens toward the rim
+// (Fresnel), carries a crisp top-weighted stroke and a tight contact shadow. It replaces the
+// directional specular of the iOS presets. Calibrated by eye against a WebGL thick-glass renderer
+// on the same backdrop; refraction 1 is its strength 1.
+PRESETS.thick = {
+  ...PRESETS.ios26,
+  blur: 3, blurClear: 0.5, blurB: 10, blurBClear: 3,
+  saturation: 1.1, brightness: 1.04,
+  refraction: 0.69, optics: 'bevel', bezel: 40, // no colour split by default: three displacements
+  // instead of one made a lifted lens drag visibly less smooth; --glass-dispersion turns it on
+  line: 0, soft: 0, back: 0, floor: 0,
+  fresnel: 1, rimLight: 0.05,     // bevel lighting: Fresnel whitening; rim stroke and glow
+  devicePx: true,                 // Tier A frost σ and bend are screen pixels (see derive)
+  toneLight: [1.1, 0.98, 0.04], toneDark: [1.1, 0.9, 0], toneClear: [1, 1.04, 0],
 };
 
 const DEFAULT_CONFIG = {
@@ -496,11 +512,36 @@ function glassField(px, py, hw, hh, corners, b) {
   return { x: 1 - t / tEdge, ox: sx * gx, oy: sy * gy, beyond: t - tEdge };
 }
 
-Object.assign(I, { resolveRadii, cornersFromCSS, bezelWidth, clipPathFor, glassField, parseLength });
+/**
+ * Thick-glass bevel (optics 'bevel'). The shape is a solid slab whose edge is a quarter circle of
+ * radius zR: at depth d inside the CSS edge (a rounded-rectangle distance with each corner's
+ * min(rx, ry)) the surface stands h(d) = √(d·(2zR − d)) high, flat from zR in. The slope (gx, gy)
+ * is a central difference over ±2 px, which keeps the vertical tangent at the edge finite. zR is
+ * not capped by the size: a slab thinner than 2zR is all bevel, like a glass rod.
+ * Pure (runs in Node and in the worker); (px, py) are relative to the centre, +y down.
+ * @returns {{ d: number, h: number, gx: number, gy: number }} d < 0 outside the shape.
+ */
+function bevelField(px, py, hw, hh, corners, zR) {
+  const c = corners[px < 0 ? (py < 0 ? 0 : 3) : (py < 0 ? 1 : 2)];
+  const r = Math.max(0, Math.min(c[0], c[1], hw, hh));
+  const depth = (x, y) => {
+    const qx = Math.abs(x) - hw + r, qy = Math.abs(y) - hh + r;
+    return r - Math.min(Math.max(qx, qy), 0) - Math.hypot(Math.max(qx, 0), Math.max(qy, 0));
+  };
+  const height = (d) => (d <= 0 ? 0 : d >= zR ? zR : Math.sqrt(d * (2 * zR - d)));
+  const e = 2, d = depth(px, py);
+  return {
+    d, h: height(d),
+    gx: (height(depth(px + e, py)) - height(depth(px - e, py))) / (2 * e),
+    gy: (height(depth(px, py + e)) - height(depth(px, py - e))) / (2 * e),
+  };
+}
+
+Object.assign(I, { resolveRadii, cornersFromCSS, bezelWidth, clipPathFor, glassField, bevelField, parseLength });
 // ── core-04-maps.js ─────────────────────────────────────────────────────────
 // Map and overlay builders (§3.3–§3.7). Pure: they return RGBA bytes and metadata, so they run
 // in Node (tests), on the main thread, or stringified into the optional Blob Worker. They may
-// only reference each other, glassField and A_RANGE (see workerSource).
+// only reference each other, glassField, bevelField and A_RANGE (see workerSource).
 
 // Alpha-x / grey-y encoding (§3.5). Chromium colour-manages displacement maps on P3 screens,
 // which skews a plain R/G map; alpha is never colour-managed and grey survives the sRGB→P3
@@ -589,11 +630,17 @@ function buildDisplacementMap(geom, opts) {
  */
 function buildLensMaps(geom, opts) {
   const { w, h, corners } = geom;
-  const { D, p = 3, zoom = 1, k = 0, margin = 2, mapScale = 1 } = opts;
+  const { D, p = 3, zoom = 1, k = 0, margin = 2, mapScale = 1, mode = 'rim' } = opts;
   const hw = w / 2, hh = h / 2;
   const tileW = Math.ceil((w + 2 * margin) * mapScale), H = Math.ceil((h + 2 * margin) * mapScale);
   const Wc = tileW / mapScale, Hc = H / mapScale, marginX = (Wc - w) / 2, marginY = (Hc - h) / 2, zk = zoom > 1 ? 1 - 1 / zoom : 0;
   const b = Math.max(0.5, Math.min(opts.b, hw, hh));
+  // mode 'bevel' (thick glass): opts.b is the slab's edge radius zR, not capped by the size. The
+  // sample moves up the surface slope, refracted at the entry and exit faces (index 1.5:
+  // (1 − 1/1.5) · 30 = 10 px per unit slope per face, plus half a face more through the slab's
+  // thickness), and toward the centre by up to 4 px where the slab is full depth: a magnifier
+  // at the rim and a slight one over the body. D scales it all (1 = strength 1).
+  const bevel = mode === 'bevel', zR = Math.max(1, opts.b);
   const c0 = corners[0];
   const symmetric = corners.every((c) => c[0] === c0[0] && c[1] === c0[1]);
   const iEnd = symmetric ? Math.ceil(tileW / 2) : tileW, jEnd = symmetric ? Math.ceil(H / 2) : H;
@@ -603,10 +650,26 @@ function buildLensMaps(geom, opts) {
     const py = (j + 0.5) / mapScale - marginY - hh;
     for (let i = 0; i < iEnd; i++) {
       const px = (i + 0.5) / mapScale - marginX - hw;
-      const f = glassField(px, py, hw, hh, corners, b);
-      if (f.beyond > 1) continue;
-      const x = f.x < 0 ? 0 : f.x > 1 ? 1 : f.x, m = x < 1 ? (1 - x) ** p : 0, ramp = 1 - x;
-      const dx = D * m * f.ox - px * zk * (1 - m), dy = D * m * f.oy - py * zk * (1 - m);
+      let dx, dy, ramp;
+      if (bevel) {
+        const s = bevelField(px, py, hw, hh, corners, zR);
+        if (s.d < -1) continue;
+        const t = s.d <= 0 ? 0 : s.d >= zR ? 1 : s.d / zR, full = t * t * (3 - 2 * t);
+        const gain = D * 10 * (2 + 0.5 * s.h / zR), pull = D * 4 * full;
+        dx = gain * s.gx - (px / Math.max(hw, 1)) * pull;
+        dy = gain * s.gy - (py / Math.max(hh, 1)) * pull;
+        // The slope is steepest in the outermost ~3 px (up to ~90 px of offset). Capping it there
+        // costs nothing visible and halves Dmax, which doubles the 8-bit map's precision everywhere.
+        const len = Math.hypot(dx, dy), cap = 48 * D;
+        if (len > cap) { dx *= cap / len; dy *= cap / len; }
+        ramp = 1 - full;
+      } else {
+        const f = glassField(px, py, hw, hh, corners, b);
+        if (f.beyond > 1) continue;
+        const x = f.x < 0 ? 0 : f.x > 1 ? 1 : f.x, m = x < 1 ? (1 - x) ** p : 0;
+        ramp = 1 - x;
+        dx = D * m * f.ox - px * zk * (1 - m); dy = D * m * f.oy - py * zk * (1 - m);
+      }
       Dmax = Math.max(Dmax, (Math.abs(dx) > Math.abs(dy) ? Math.abs(dx) : Math.abs(dy)) * (1 + k * ramp));
       const set = (ii, jj, sgx, sgy) => { const q = (jj * tileW + ii) * 3; off[q] = sgx * dx; off[q + 1] = sgy * dy; off[q + 2] = ramp; };
       set(i, j, 1, 1);
@@ -641,11 +704,14 @@ function buildLensMaps(geom, opts) {
  */
 function buildOverlay(geom, opts) {
   const { w, h, corners } = geom;
-  const { mapScale = 1, light, line, lineW, soft, softW, back, floor, edgeDark = 0, sheen = 0, intensity = 1, slice = false } = opts;
+  const { mapScale = 1, light, line, lineW, soft, softW, back, floor, edgeDark = 0, sheen = 0, intensity = 1, slice = false, bevel = null } = opts;
   const hw = w / 2, hh = h / 2, b = Math.max(0.5, Math.min(opts.b, hw, hh)), lx = light[0], ly = light[1];
   // Below half an 8-bit step every term is invisible: the soft falloff ends at softW·ln(510·soft),
   // the line well before, the sheen at b, the dark edge within ~2 px. Deeper pixels stay clear.
-  const reach = Math.max(softW * Math.log(Math.max(1, 510 * soft * intensity)), 4 * lineW, sheen ? b : 0, 3);
+  // Thick glass (bevel = { zR, fresnel, rim }) lights its rim out to 0.35·min(w, h) / 2 at most.
+  const reach = Math.max(softW * Math.log(Math.max(1, 510 * soft * intensity)), 4 * lineW, sheen ? b : 0, 3,
+    bevel ? Math.max(0.35 * Math.min(hw, hh), 6) : 0);
+  const ss = (e0, e1, v) => { const t = Math.min(1, Math.max(0, (v - e0) / (e1 - e0))); return t * t * (3 - 2 * t); };
   let T = 0, R = 0, B = 0, L = 0;
   if (slice) {
     const span = (r) => Math.ceil(Math.max(r, reach)) + 1;
@@ -676,6 +742,17 @@ function buildOverlay(geom, opts) {
       let I = intensity * lobe * (line * Math.exp(-((d / lineW) ** 2)) + soft * Math.exp(-d / softW));
       if (sheen) { const s = 1 - Math.min(1, d / b); I += sheen * s * s; }
       if (I > 1) I = 1;
+      if (bevel) {
+        // White light composited over the refraction: Fresnel (1 − n_z)⁴ where the surface tilts
+        // away, a crisp stroke 1.5–2.5 px in that is strongest along the top, a soft rim glow, and
+        // a faint reflection that favours the lower rim. (Additive light is drawn as alpha.)
+        const s = bevelField(px, py, hw, hh, corners, bevel.zR);
+        const len = Math.hypot(s.gx, s.gy, 1), fres = (1 - 1 / len) ** 4 * bevel.fresnel;
+        const stroke = ss(-2.5, -1.5, -s.d) * (1 - ss(-1, 0, -s.d)) * (0.7 - 0.3 * py / hh);
+        const add = Math.min(1, bevel.rim * ((1 - ss(0, 0.35 * Math.min(hw, hh), s.d)) * 0.22 + (1 - ss(0, 5, s.d)) * 0.15 + stroke * 0.55)
+          + (0.5 - 0.5 * s.gy / len) * fres * 0.08);
+        I = 1 - (1 - I) * (1 - intensity * (1 - (1 - 0.2 * fres) * (1 - add)));
+      }
       const E = edgeDark * Math.exp(-((d / 0.6) ** 2));
       const a = I + E * (1 - I); // white (I) over black (E)
       if (a <= 0) continue;
@@ -724,7 +801,7 @@ const mapScaleFor = (areaCssPx, dpr) => (areaCssPx <= 160000 ? Math.min(dpr, 2) 
 
 /** Source of the optional Blob Worker (init({ worker: true })). */
 function workerSource() {
-  return `'use strict';\nconst A_RANGE = ${A_RANGE};\n${[glassField, encodeAG, buildDisplacementMap, buildLensMaps, buildOverlay, buildRimMask].map(String).join('\n')}
+  return `'use strict';\nconst A_RANGE = ${A_RANGE};\n${[glassField, bevelField, encodeAG, buildDisplacementMap, buildLensMaps, buildOverlay, buildRimMask].map(String).join('\n')}
 const BUILDERS = { map: buildDisplacementMap, lens: buildLensMaps, overlay: buildOverlay, rim: buildRimMask };
 onmessage = async ({ data: { id, kind, geom, opts } }) => {
   try {
@@ -966,11 +1043,12 @@ function acquireMap(geom, opts, urgent = false) {
 }
 
 /**
- * Lens maps (see buildLensMaps) for geom and opts = { b, D, p, zoom, k, margin, mapScale }.
- * Same cache as acquireMap; the entry's `urls` holds the G pair and, with k > 0, the R pair.
+ * Lens maps (see buildLensMaps) for geom and opts = { b, D, p, zoom, k, margin, mapScale, mode }
+ * (mode 'rim', or 'bevel' for thick glass's resting map). Same cache as acquireMap; the entry's
+ * `urls` holds the G pair and, with k > 0, the R pair.
  */
 function acquireLensMap(geom, opts, urgent = false) {
-  const o = { ...mapOptions(opts), mode: 'rim', encoding: 'g2' };
+  const o = { ...mapOptions(opts), mode: opts.mode === 'bevel' ? 'bevel' : 'rim', encoding: 'g2' };
   return mapCache.acquire(mapKey(geom, o), () => buildImage('lens', geom, o, urgent));
 }
 
@@ -1039,8 +1117,9 @@ function placeImage(node, img) {
  *                      S·(1 − k), S, S·(1 + k) (animatable k). 'g2' with 4 tiles: the fraction 0–1
  *                      of the baked, rim-ramped split that is shown (R = G + f·(R₀ − G),
  *                      B = G − f·(R₀ − G)).
- *   alt, mix           optional second map { href, x, y, width, height, scale } ('ag'), blended as
- *                      mix·map + (1 − mix)·alt (lift crossfades)
+ *   alt, mix           optional second map { href, x, y, width, height, scale } ('ag', or a 'g2'
+ *                      [x | y] pair when it has `tiles`), blended as mix·map + (1 − mix)·alt (lift
+ *                      crossfades)
  *   smooth             optional σ applied after displacement: feDisplacementMap samples the nearest
  *                      pixel, so a magnified or compressed backdrop shows stair-steps without it
  *   sharp              optional { href, x, y, width, height, blur }: a second, less blurred
@@ -1060,7 +1139,7 @@ function placeImage(node, img) {
  */
 const SELECTORS = { ag: ['A', 'R'], rg: ['R', 'G'], g2: ['R', 'G'] };
 const SPEC_DEFAULTS = { mix: 1, dispersion: 0, split: false, alt: null, smooth: null, vivid: null, flatten: false, enc: 'ag' };
-const structureOf = (s) => [s.enc || 'ag', s.enc === 'g2' ? s.map?.tiles || 2 : 0, s.split && s.enc !== 'g2' ? 1 : 0, s.alt ? 1 : 0, s.smooth != null ? 1 : 0, s.vivid ? 1 : 0, s.flatten ? 1 : 0, sharpOn(s) ? 1 : 0].join('');
+const structureOf = (s) => [s.enc || 'ag', s.enc === 'g2' ? s.map?.tiles || 2 : 0, s.split && s.enc !== 'g2' ? 1 : 0, s.alt ? (s.alt.tiles ? 2 : 1) : 0, s.smooth != null ? 1 : 0, s.vivid ? 1 : 0, s.flatten ? 1 : 0, sharpOn(s) ? 1 : 0].join('');
 const sharpOn = (s) => !!s.sharp;
 
 class GlassFilter {
@@ -1098,21 +1177,21 @@ class GlassFilter {
       svgNode('feColorMatrix', { in: dB, type: 'matrix', values: pick(2), result: `${out}B` }),
       svgNode('feComposite', { in: `${out}R`, in2: `${out}G`, operator: 'arithmetic', k1: 0, k2: 1, k3: 1, k4: 0, result: `${out}RG` }),
       svgNode('feComposite', { in: `${out}RG`, in2: `${out}B`, operator: 'arithmetic', k1: 0, k2: 1, k3: 1, k4: 0, result: out }));
+    // Grey tiles → an opaque (x → R, y → G) map inside the filter, where no colour management
+    // applies: route each grey to its channel and add (alpha 1 + 1 clamps to 1).
+    const ROUTE_X = '1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0 1', ROUTE_Y = '0 0 0 0 0  1 0 0 0 0  0 0 0 0 0  0 0 0 0 1';
+    const pack = (tx, ty, result) => f.append(
+      svgNode('feColorMatrix', { in: tx, type: 'matrix', values: ROUTE_X, result: `${result}x` }),
+      svgNode('feColorMatrix', { in: ty, type: 'matrix', values: ROUTE_Y, result: `${result}y` }),
+      svgNode('feComposite', { in: `${result}x`, in2: `${result}y`, operator: 'arithmetic', k1: 0, k2: 1, k3: 1, k4: 0, result }));
     // Displacement maps per channel: [R, G, B] results and whether they differ (a split).
     let maps;
     if (s.enc === 'g2') {
-      // Grey tiles → an opaque (x → R, y → G) map inside the filter, where no colour management
-      // applies: route each grey to its channel and add (alpha 1 + 1 clamps to 1).
       // Each feImage covers exactly the map box; `slice` scales its [x | y] pair to the box height
       // and xMin / xMax pick the tile, so no primitive rasterizes the other tile.
       const tiles = s.map.tiles || 2;
       n.tiles = Array.from({ length: tiles }, (_, t) => svgNode('feImage', { preserveAspectRatio: `${t % 2 ? 'xMax' : 'xMin'}YMin slice`, result: `t${t}` }));
       f.append(...n.tiles);
-      const ROUTE_X = '1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0 1', ROUTE_Y = '0 0 0 0 0  1 0 0 0 0  0 0 0 0 0  0 0 0 0 1';
-      const pack = (tx, ty, result) => f.append(
-        svgNode('feColorMatrix', { in: tx, type: 'matrix', values: ROUTE_X, result: `${result}x` }),
-        svgNode('feColorMatrix', { in: ty, type: 'matrix', values: ROUTE_Y, result: `${result}y` }),
-        svgNode('feComposite', { in: `${result}x`, in2: `${result}y`, operator: 'arithmetic', k1: 0, k2: 1, k3: 1, k4: 0, result }));
       pack('t0', 't1', 'mG');
       if (tiles === 4) {
         pack('t2', 't3', 'mR0');
@@ -1157,10 +1236,19 @@ class GlassFilter {
     }
     let out = n.sharpOut ? 'refrSharp' : 'refr';
     if (s.alt) {
-      n.altMap = svgNode('feImage', { preserveAspectRatio: 'none', result: 'amap' });
-      n.altDisp = displace('amap', 'ag', 'arefr');
+      if (s.alt.tiles) {
+        // A grey-tile resting map (thick glass rests on one): its G pair, packed like the main map.
+        n.altTiles = [0, 1].map((t) => svgNode('feImage', { preserveAspectRatio: `${t ? 'xMax' : 'xMin'}YMin slice`, result: `at${t}` }));
+        f.append(...n.altTiles);
+        pack('at0', 'at1', 'amap');
+        n.altDisp = displace('amap', 'g2', 'arefr');
+      } else {
+        n.altMap = svgNode('feImage', { preserveAspectRatio: 'none', result: 'amap' });
+        n.altDisp = displace('amap', 'ag', 'arefr');
+        f.append(n.altMap);
+      }
       n.mix = svgNode('feComposite', { in: out, in2: 'arefr', operator: 'arithmetic', k1: 0, k4: 0, result: 'mixed' });
-      f.append(n.altMap, n.altDisp, n.mix);
+      f.append(n.altDisp, n.mix);
       out = 'mixed';
     }
     if (s.smooth != null) {
@@ -1219,8 +1307,9 @@ class GlassFilter {
         writeAttr(n.mixB, 'k2', 1 + fr); writeAttr(n.mixB, 'k3', -fr);
       }
     } else placeImage(n.map, s.map);
-    if (n.altMap && s.alt) {
-      placeImage(n.altMap, s.alt);
+    if (n.altDisp && s.alt) {
+      if (n.altTiles) n.altTiles.forEach((node) => placeImage(node, s.alt));
+      else placeImage(n.altMap, s.alt);
       writeAttr(n.altDisp, 'scale', s.alt.scale);
       writeAttr(n.mix, 'k2', clamp(s.mix, 0, 1));
       writeAttr(n.mix, 'k3', 1 - clamp(s.mix, 0, 1));
@@ -1680,7 +1769,7 @@ const ENUMS = {
   variant: ['regular', 'clear', 'identity'],
   tone: ['auto', 'light', 'dark', 'adaptive'],
   shape: ['auto', 'capsule', 'circle', 'rect', 'concentric'],
-  optics: ['rim', 'lens'],
+  optics: ['rim', 'lens', 'bevel'],
   light: ['static', 'pointer'],
   tier: ['auto', 'a', 'b', 'c'],
   quality: ['balanced', 'high'],
@@ -2035,7 +2124,11 @@ class Glass {
     const { w, h } = this.geom, o = this.o, tier = this.tier;
     const clear = o.variant === 'clear';
     const blurGain = tintedBlurGain(); // "Tinted" preference: more frost (§4.4)
-    const sigma0 = (o.blur ?? (clear ? D.blurClear : D.blur)) * blurGain;
+    // Thick glass in a devicePx preset sets its Tier A frost and its bend in screen pixels, like the
+    // renderer it is calibrated against: a 2× screen shows half the CSS-px blur and offset at the
+    // same settings (the slab's size, edge radius and shadow stay in CSS px).
+    const screen = o.optics === 'bevel' && D.devicePx ? 1 / Math.max(1, caps.dpr) : 1;
+    const sigma0 = (o.blur ?? (clear ? D.blurClear : D.blur)) * blurGain * screen;
     let sigmaB0 = (o.blur ?? (clear ? D.blurBClear : D.blurB)) * blurGain;
     if (w > 400 && h > 400) sigmaB0 = Math.min(sigmaB0, 20);
     // Tinted glass keeps its colour: no brightness lift and a neutral tone gain, so the backdrop
@@ -2048,9 +2141,13 @@ class Glass {
       bright: o.brightness ?? (o.tinted || clear ? 1 : D.brightness),
     });
     const b = bezelWidth(w, h, o.bezel);
-    const rim = o.optics !== 'lens';
-    const reach = rim ? D.kReach * b : 0.2 * b; // D before the strength multiplier
-    const strength = o.refraction;
+    // Thick glass (optics 'bevel'): the bezel is the slab's edge radius, not capped by the size
+    // (thinner than 2·bezel, the slab is all edge, like a rod). It samples inward only.
+    const bevel = o.optics === 'bevel';
+    const zR = bevel ? (typeof o.bezel === 'number' && o.bezel > 0 ? o.bezel : 40) : 0;
+    const rim = o.optics === 'rim';
+    const reach = rim ? D.kReach * b : bevel ? 0 : 0.2 * b; // D before the strength multiplier
+    const strength = o.refraction * screen;
     // Overscan must hold the farthest outward sample (B, dispersed, reaches (1 + k)·D; sized for
     // the strongest k so a dispersion slider does not resize the layer) plus the blur kernel (§3.1).
     const k = tiers.dispersing.has(this) ? DISPERSION_REST * o.dispersion : 0;
@@ -2065,7 +2162,7 @@ class Glass {
     const overL = trim(room?.left), overR = trim(room?.right);
     const dpr = caps.dpr;
     return {
-      w, h, b, reach, strength, sigma, sigma0, sigmaB, over, overL, overR, Wc: w + 2 * over, Hc: h + 2 * over,
+      w, h, b, zR, reach, strength, sigma, sigma0, sigmaB, over, overL, overR, Wc: w + 2 * over, Hc: h + 2 * over,
       sat, bright, tone, k,
       mapScale: mapScaleFor((w + 4) * (h + 4), dpr),
       overlayScale: Math.min(Math.ceil(dpr), 2), // integer, so 9-slice edges land on whole image pixels
@@ -2074,6 +2171,9 @@ class Glass {
 
   mapOpts() {
     const d = this.d, o = this.o;
+    // Thick glass rests on a grey-tile lens map (full precision under its strong magnification).
+    // Its colour split is baked into the map (k: an R pair), like a lens's.
+    if (o.optics === 'bevel') return { b: d.zR, D: 1, p: o.profile, mode: 'bevel', zoom: 1, mapScale: d.mapScale, encoding: 'g2', k: d.k };
     return { b: d.b, D: d.reach, p: o.profile, mode: o.optics === 'lens' ? 'lens' : 'rim', zoom: o.zoom, mapScale: d.mapScale };
   }
 
@@ -2084,6 +2184,7 @@ class Glass {
       line: D.line, lineW: D.lineW, soft: D.soft, softW: D.softW, back: D.back, floor: D.floor,
       edgeDark: o.edgeDark, sheen: this.tier === 'b' ? sheenFor(D.sheen, state.sheenTinted) : 0, // fades with the "Clear" preference
       intensity: +fmt(o.highlight * (this.tone === 'dark' ? 0.8 : 1), 3), slice: true,
+      bevel: o.optics === 'bevel' ? { zR: +fmt(d.zR, 2), fresnel: D.fresnel ?? 1, rim: D.rimLight ?? 0.05 } : null,
     };
   }
 
@@ -2207,7 +2308,7 @@ class Glass {
     const opts = mapOptions(this.mapOpts()), key = mapKey(this.geom, opts);
     if (this.want.map === key || (stretch && this.res.map)) return;
     this.want.map = key;
-    acquireMap(this.geom, opts, this.interacting > 0).then((entry) => {
+    (opts.mode === 'bevel' ? acquireLensMap : acquireMap)(this.geom, opts, this.interacting > 0).then((entry) => {
       if (!entry) return;
       if (this.dead || this.want.map !== entry.key || this.tier !== 'a') { mapCache.release(entry); return; }
       const prev = this.res.map;
@@ -2306,10 +2407,16 @@ class Glass {
     // R/B split at the edge: 2k·D·strength (CSS px). Below half a device pixel it is invisible, and
     // the filter stays single-pass. The split is drawn by the rim pass (`sharp`), masked to the rim,
     // so the plateau is pixel-identical to no dispersion; it waits for the rim mask.
-    const split = !!box && d.k > 0 && 2 * d.k * d.reach * d.strength * caps.dpr >= 0.5;
+    // A grey-tile map (thick glass) splits by the R pair baked into it (k), shown in full; it is
+    // then ramped by the bevel, not masked to a rim. It is smoothed by half a device pixel:
+    // feDisplacementMap samples the nearest pixel, and under the bevel's steady magnification the
+    // places where the sample jumps a pixel show as faint contour lines (stair-steps on detail).
+    const g2 = map.meta.encoding === 'g2', g2split = g2 && map.meta.tiles === 4;
+    const split = !g2 && !!box && d.k > 0 && 2 * d.k * d.reach * d.strength * caps.dpr >= 0.5;
     return {
-      width: d.Wc, height: d.Hc, blur: d.sigma, enc: config.encoding, map: this.placeMap(map, d.strength),
-      dispersion: split ? d.k : 0, split, tone: d.tone, flatten: this.o.flatten,
+      width: d.Wc, height: d.Hc, blur: d.sigma, enc: g2 ? 'g2' : config.encoding, map: this.placeMap(map, d.strength),
+      dispersion: g2split ? 1 : split ? d.k : 0, split, tone: d.tone, flatten: this.o.flatten,
+      smooth: g2 ? +fmt(0.5 / caps.dpr, 2) : null,
       // The vivid rim is part of the material: it fades with the "Clear" preference, like the tone.
       vivid: this.o.quality === 'high' && box ? { ...box, amount: clearKeep() } : null, sharp: box ? this.sharpRim(split) : null,
     };

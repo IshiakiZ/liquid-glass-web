@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-glass-url-overrides>
+<html lang="en" data-glass-url-overrides data-glass-preset="thick">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -624,7 +624,8 @@
     <div class="sc-tune-row sc-tune-seg">
       <span id="tuPresetLabel">Preset</span>
       <div class="glass glass-segmented" role="radiogroup" aria-labelledby="tuPresetLabel">
-        <label><input type="radio" name="tuPreset" value="ios26" checked><span>iOS 26</span></label>
+        <label><input type="radio" name="tuPreset" value="thick" checked><span>Thick</span></label>
+        <label><input type="radio" name="tuPreset" value="ios26"><span>iOS 26</span></label>
         <label><input type="radio" name="tuPreset" value="ios27"><span>iOS 27</span></label>
       </div>
     </div>
@@ -649,11 +650,12 @@
   <fieldset class="sc-tune-group">
     <legend>Optics</legend>
     <div class="sc-tune-row"><label for="tuRefraction">Refraction</label><output for="tuRefraction"></output><div class="glass-slider"><input type="range" id="tuRefraction" data-key="refraction" min="0" max="2" step="0.05"></div></div>
-    <div class="sc-tune-row"><label for="tuBezel">Bezel</label><output for="tuBezel"></output><div class="glass-slider"><input type="range" id="tuBezel" data-key="bezel" min="3" max="32" step="1"></div></div>
+    <div class="sc-tune-row"><label for="tuBezel">Bezel</label><output for="tuBezel"></output><div class="glass-slider"><input type="range" id="tuBezel" data-key="bezel" min="3" max="64" step="1"></div></div>
     <div class="sc-tune-row sc-tune-seg">
       <span id="tuOpticsLabel">Sampling</span>
       <div class="glass glass-segmented" role="radiogroup" aria-labelledby="tuOpticsLabel">
-        <label><input type="radio" name="tuOptics" value="rim" checked><span>Rim</span></label>
+        <label><input type="radio" name="tuOptics" value="bevel" checked><span>Bevel</span></label>
+        <label><input type="radio" name="tuOptics" value="rim"><span>Rim</span></label>
         <label><input type="radio" name="tuOptics" value="lens"><span>Lens</span></label>
       </div>
     </div>
