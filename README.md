@@ -48,7 +48,7 @@ Neither tier is a screenshot. The glass always shows the live page behind it. Re
 
 | Piece | Markup |
 |---|---|
-| Glass | `.glass` on any element. `data-glass="clear"` for the clear material, `data-glass-tint="#5e5ce6"` for tinted |
+| Glass | `.glass` on any element. `data-glass="clear"` for the clear material, `data-glass-tint="#5e5ce6"` for tinted, `data-glass-optics="bevel"` for thick glass |
 | Buttons | `.glass.glass-button`, with `.glass-prominent`, `.glass-icon`, `data-glass-size="small"` or `"large"`, and `data-glass-interactive` for the press effect |
 | Bars and groups | `.glass.glass-bar`, `.glass.glass-group` holding `.glass-item`s, inside a `.glass-toolbar` |
 | Tab bar | `.glass.glass-tabbar` with `<a>` or `<button>` tabs; hold a tab and drag to scrub. `data-glass-minimize="scroll"` tucks it away while the page scrolls |
@@ -76,7 +76,26 @@ The script defines `LiquidGlass` (also the default export of `liquid-glass.mjs`)
 and elements added later are picked up. To start it yourself, set `window.LiquidGlassConfig = { autoInit: false }`
 before the script and call `LiquidGlass.init()`.
 
-## New in 1.1.0: the pill resizes
+## New in 1.2.0: thick glass
+
+The showcase now opens with a new preset, **thick**: every glass is a solid slab with a round edge instead of a thin
+sheet. What passes under it bends and magnifies toward the rim, like looking through a glass rod; the rim catches
+the light and a tight shadow sits under it.
+
+```html
+<!-- every glass on the page -->
+<html data-glass-preset="thick">
+
+<!-- or one element: the bezel is the radius of the slab's round edge, in px -->
+<div class="glass" data-glass-optics="bevel" data-glass-bezel="30">…</div>
+```
+
+The look follows [liquid-glass.ybouane.com](https://liquid-glass.ybouane.com/), which paints a snapshot of the page
+through a WebGL shader. Here it is live refraction, like the rest of the library, so it follows scrolling and every
+change on the page. The iOS 26 and iOS 27 presets are unchanged and still in the Tune panel. See
+[CHANGELOG.md](CHANGELOG.md) for how it works and where it lives in the bundle.
+
+## In 1.1.0: the pill resizes
 
 - `data-glass-segments="content"` on a segmented control sizes each segment by its label instead of equally.
 - While you scrub a tab bar or a segmented control, the lifted lens takes the width of the item under it and eases
